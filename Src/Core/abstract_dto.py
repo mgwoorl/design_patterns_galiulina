@@ -2,18 +2,19 @@ import abc
 from Src.Core.common import common
 from Src.Core.validator import validator, operation_exception
 
-
 """
 Абстрактный класс для наследования только dto структур
 """
+
+
 class abstact_dto:
-    __name:str = ""
-    __id:str = ""
+    __name: str = ""
+    __id: str = ""
 
     @property
-    def name(self) ->str:
+    def name(self) -> str:
         return self.__name
-    
+
     @name.setter
     def name(self, value):
         self.__name = value
@@ -24,9 +25,10 @@ class abstact_dto:
 
     @id.setter
     def id(self, value):
-        self.__id = value   
+        self.__id = value
 
-    # Универсальный фабричный метод для загрузщки dto из словаря
+        # Универсальный фабричный метод для загрузщки dto из словаря
+
     @abc.abstractmethod
     def create(self, data) -> "abstact_dto":
         validator.validate(data, dict)
@@ -35,8 +37,8 @@ class abstact_dto:
 
         try:
             for key in matching_keys:
-                setattr(self, key, data[ key ])
+                setattr(self, key, data[key])
         except:
-            raise   operation_exception("Невозможно загрузить данные!")    
+            raise operation_exception("Невозможно загрузить данные!")
 
         return self

@@ -14,7 +14,7 @@ class common:
         for  inheritor in entity_model.__subclasses__():
             result.append(inheritor.__name__)
 
-        return result    
+        return result
 
 
     """
@@ -26,7 +26,7 @@ class common:
         if source is None:
             raise argument_exception("Некорректно переданы аргументы!")
 
-        items = list(filter(lambda x: not x.startswith("_") , dir(source))) 
+        items = list(filter(lambda x: not x.startswith("_") , dir(source)))
         result = []
 
         for item in items:
@@ -41,4 +41,3 @@ class common:
                 result.append(item)
 
         return result
-
