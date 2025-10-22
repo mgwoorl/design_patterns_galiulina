@@ -1,15 +1,24 @@
+from enum import Enum
 
-# Форматы ответов
-class response_formats:
+
+class ResponseFormat(Enum):
+    CSV = "csv"
+    MARKDOWN = "markdown"
+    JSON = "json"
+    XML = "xml"
 
     @staticmethod
     def csv() -> str:
         return "csv"
-    
+
     @staticmethod
-    def excel() -> str:
-        return "excel"
-    
+    def markdown() -> str:
+        return "markdown"
+
     @staticmethod
     def json() -> str:
         return "json"
+
+    @staticmethod
+    def xml() -> str:
+        return "xml"

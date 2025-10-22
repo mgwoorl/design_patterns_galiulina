@@ -3,7 +3,7 @@ from Src.Core.common import common
 from Src.Core.validator import validator, operation_exception
 
 
-class response_csv(abstract_response):
+class response_markdown(abstract_response):
     def build(self, data: list) -> str:
         super().build(data)
 
@@ -11,10 +11,11 @@ class response_csv(abstract_response):
             return ""
 
         text = ""
-        # Шапка
+        # Шапка таблицы
         item = data[0]
         fields = common.get_fields(item)
-        text += ";".join(fields) + "\n"
+        text += "| " + " | ".join(fields) + " |\n"
+        text += "|" + "|".join(["---"] * len(fields)) + "|\n"
 
         # Данные
         for item in data:
@@ -28,6 +29,6 @@ class response_csv(abstract_response):
                     row.append(str(value.unique_code))
                 else:
                     row.append(str(value))
-            text += ";".join(row) + "\n"
+            text += "| " + " | ".join(row) + " |\n"
 
         return text

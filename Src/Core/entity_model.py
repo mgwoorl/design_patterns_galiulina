@@ -25,5 +25,3 @@ class entity_model(abstact_model):
         item = entity_model()
         item.name = name
         return item
-    
-  
