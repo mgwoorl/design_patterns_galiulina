@@ -4,6 +4,8 @@ from Src.start_service import start_service
 from Src.Logics.factory_entities import factory_entities
 from Src.Models.settings_model import settings_model, ResponseFormat
 from Src.reposity import reposity
+from Src.Logics.convert_factory import convert_factory
+import json
 
 app = connexion.FlaskApp(__name__)
 
@@ -70,6 +72,59 @@ def get_data(entity_type: str, format_type: str):
             content_type=content_types.get(format_type, "text/plain")
         )
 
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/api/receipts", methods=['GET'])
+def get_receipts():
+    """
+    Возвращает список всех рецептов в JSON формате
+    """
+    try:
+        receipts = service.data.get(reposity.receipt_key(), [])
+        factory = convert_factory()
+        
+        result = []
+        for receipt in receipts:
+            # Используем фабрику конвертеров для преобразования рецепта
+            converted_data = factory.convert(receipt)
+            result.append(converted_data)
+            
+        return Response(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+@app.route("/api/receipt/<receipt_id>", methods=['GET'])
+def get_receipt(receipt_id: str):
+    """
+    Возвращает конкретный рецепт по указанному коду в JSON формате
+    """
+    try:
+        receipts = service.data.get(reposity.receipt_key(), [])
+        factory = convert_factory()
+        
+        # Ищем рецепт по unique_code
+        found_receipt = None
+        for receipt in receipts:
+            if receipt.unique_code == receipt_id:
+                found_receipt = receipt
+                break
+                
+        if not found_receipt:
+            return {"error": f"Receipt with id {receipt_id} not found"}, 404
+            
+        # Используем фабрику конвертеров для преобразования рецепта
+        converted_data = factory.convert(found_receipt)
+        
+        return Response(
+            json.dumps(converted_data, ensure_ascii=False, indent=2),
+            content_type="application/json; charset=utf-8"
+        )
+        
     except Exception as e:
         return {"error": str(e)}, 500
 
