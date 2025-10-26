@@ -12,7 +12,6 @@ from datetime import datetime
 Управляет созданием и использованием конверторов с рекурсивной обработкой
 """
 
-
 class convert_factory:
 
     def __init__(self):
@@ -25,7 +24,6 @@ class convert_factory:
     def convert(self, obj: object) -> dict:
         """
         Конвертирует любой объект любого типа в словарь.
-        Использует только публичные свойства через common.get_fields()
 
         Args:
             obj: любой объект для конвертации
@@ -37,15 +35,15 @@ class convert_factory:
 
         result = {}
 
-        # Получаем только публичные поля через common.get_fields()
-        fields = common.get_fields(obj)
+        # Для моделей используем common.get_fields(), для обычных объектов - dir()
+        if isinstance(obj, abstact_model):
+            fields = common.get_fields(obj)
+        else:
+            # Для обычных объектов используем dir() и фильтруем приватные поля
+            fields = [attr for attr in dir(obj) if not attr.startswith('_') and not callable(getattr(obj, attr))]
 
         for field in fields:
             try:
-                # Пропускаем composition, так как он содержит null значения
-                if field == "composition":
-                    continue
-
                 value = getattr(obj, field)
 
                 # Обрабатываем значение в зависимости от типа
@@ -95,16 +93,13 @@ class convert_factory:
             converted_list = []
             for item in value:
                 if item is None:
-                    # Пропускаем null значения в списках
                     continue
                 elif isinstance(item, abstact_model):
                     # Рекурсивно конвертируем объекты в списке
                     converted_item = self.convert(item)
-                    # Добавляем только если есть полезные данные
                     if converted_item:
                         converted_list.append(converted_item)
                 else:
-                    # Для простых значений в списке
                     converted_list.append(item)
             return converted_list if converted_list else None
 
