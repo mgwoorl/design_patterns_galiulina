@@ -2,14 +2,21 @@ from Src.reposity import reposity
 from Src.Models.range_model import range_model
 from Src.Models.group_model import group_model
 from Src.Models.nomenclature_model import nomenclature_model
+from Src.Models.receipt_model import receipt_model
+from Src.Models.receipt_item_model import receipt_item_model
+from Src.Models.storage_model import storage_model
+from Src.Models.transaction_model import transaction_model
 from Src.Core.validator import validator, argument_exception, operation_exception
 import os
 import json
-from Src.Models.receipt_model import receipt_model
-from Src.Models.receipt_item_model import receipt_item_model
 from Src.Dtos.nomenclature_dto import nomenclature_dto
 from Src.Dtos.range_dto import range_dto
 from Src.Dtos.category_dto import category_dto
+from datetime import datetime
+
+"""
+Сервис инициализации приложения
+"""
 
 
 class start_service:
@@ -37,32 +44,37 @@ class start_service:
         if os.path.exists(full_file_name):
             self.__full_file_name = full_file_name.strip()
         else:
-            raise argument_exception(f'Не найден файл настроек {full_file_name}')
+            raise argument_exception(f'Не найден файл {full_file_name}')
 
     def load(self) -> bool:
+        """
+        Загружает данные из файла настроек
+        """
         if self.__full_file_name == "":
-            raise operation_exception("Не найден файл настроек!")
+            raise operation_exception("Не найден файл!")
 
-        try:
-            with open(self.__full_file_name, 'r', encoding='utf-8') as file_instance:
-                settings = json.load(file_instance)
+        with open(self.__full_file_name, 'r', encoding='utf-8') as file_instance:
+            settings = json.load(file_instance)
 
-                if "default_receipt" in settings.keys():
-                    data = settings["default_receipt"]
-                    return self.convert(data)
+            if "default_receipt" in settings.keys():
+                data = settings["default_receipt"]
+                return self.convert(data)
 
-            return False
-        except Exception as e:
-            print(f"Ошибка загрузки: {e}")
-            return False
+        return False
 
     def __save_item(self, key: str, dto, item):
+        """
+        Сохраняет элемент в репозиторий
+        """
         validator.validate(key, str)
         item.unique_code = dto.id
         self.__cache.setdefault(dto.id, item)
         self.__repo.data[key].append(item)
 
     def __convert_ranges(self, data: dict) -> bool:
+        """
+        Конвертирует данные единиц измерения
+        """
         validator.validate(data, dict)
         ranges = data['ranges'] if 'ranges' in data else []
         if len(ranges) == 0:
@@ -75,6 +87,9 @@ class start_service:
         return True
 
     def __convert_groups(self, data: dict) -> bool:
+        """
+        Конвертирует данные групп
+        """
         validator.validate(data, dict)
         categories = data['categories'] if 'categories' in data else []
         if len(categories) == 0:
@@ -87,6 +102,9 @@ class start_service:
         return True
 
     def __convert_nomenclatures(self, data: dict) -> bool:
+        """
+        Конвертирует данные номенклатур
+        """
         validator.validate(data, dict)
         nomenclatures = data['nomenclatures'] if 'nomenclatures' in data else []
         if len(nomenclatures) == 0:
@@ -98,7 +116,76 @@ class start_service:
             self.__save_item(reposity.nomenclature_key(), dto, item)
         return True
 
+    def __create_storages(self):
+        """
+        Создает тестовые склады
+        """
+        try:
+            storage1 = storage_model.create("Главный склад", "ул. Промышленная, 25")
+            storage1.unique_code = "42221216-243e-4736-b841-99b52fca79cf"
+
+            storage2 = storage_model.create("Запасной склад", "ул. Складская, 8")
+            storage2.unique_code = "1940adfe-dbe8-4336-b3b0-3c1864881de5"
+
+            self.__repo.data[reposity.storage_key()].extend([storage1, storage2])
+
+        except Exception as e:
+            raise operation_exception(f"Ошибка создания складов: {str(e)}")
+
+    def __create_transactions(self):
+        """
+        Создает тестовые транзакции
+        """
+        try:
+            storages = self.__repo.data.get(reposity.storage_key(), [])
+            nomenclatures = self.__repo.data.get(reposity.nomenclature_key(), [])
+
+            self.__repo.data[reposity.transaction_key()] = []
+
+            if not storages or not nomenclatures:
+                return
+
+            main_storage = storages[0]
+
+            flour_nom = next((n for n in nomenclatures if "мука" in n.name.lower()), None)
+            sugar_nom = next((n for n in nomenclatures if "сахар" in n.name.lower()), None)
+
+            transactions = []
+
+            # Создаем транзакции в граммах
+            if flour_nom:
+                transactions.extend([
+                    transaction_model.create(
+                        datetime(2024, 10, 1, 10, 0, 0),
+                        flour_nom, main_storage, 100.0, "г"
+                    ),
+                    transaction_model.create(
+                        datetime(2024, 10, 15, 14, 30, 0),
+                        flour_nom, main_storage, -50.0, "г"
+                    )
+                ])
+
+            if sugar_nom:
+                transactions.extend([
+                    transaction_model.create(
+                        datetime(2024, 10, 20, 9, 15, 0),
+                        sugar_nom, main_storage, 200.0, "г"
+                    ),
+                    transaction_model.create(
+                        datetime(2024, 10, 25, 16, 45, 0),
+                        sugar_nom, main_storage, -75.0, "г"
+                    )
+                ])
+
+            self.__repo.data[reposity.transaction_key()].extend(transactions)
+
+        except Exception as e:
+            raise operation_exception(f"Ошибка создания транзакций: {str(e)}")
+
     def convert(self, data: dict) -> bool:
+        """
+        Конвертирует данные из JSON в модели
+        """
         validator.validate(data, dict)
 
         cooking_time = data['cooking_time'] if 'cooking_time' in data else ""
@@ -126,13 +213,23 @@ class start_service:
             self.__default_receipt.composition.append(item)
 
         self.__repo.data[reposity.receipt_key()].append(self.__default_receipt)
+
+        self.__create_storages()
+        self.__create_transactions()
+
         return True
 
     @property
     def data(self):
-        return self.__repo.data
+        """
+        Возвращает репозиторий данных
+        """
+        return self.__repo
 
     def start(self):
+        """
+        Запускает инициализацию приложения
+        """
         import os
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_name = os.path.join(base_dir, "..", "settings.json")
@@ -141,3 +238,6 @@ class start_service:
         result = self.load()
         if result == False:
             raise operation_exception("Невозможно сформировать стартовый набор данных!")
+
+        self.__create_storages()
+        self.__create_transactions()
