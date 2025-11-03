@@ -16,6 +16,9 @@ class export_service:
         self.__convert_factory = convert_factory()
 
     def export_all_data(self, file_path: str) -> bool:
+        """
+        Экспортирует все данные из репозитория в JSON файл
+        """
         validator.validate(file_path, str)
 
         export_data = {
@@ -28,12 +31,17 @@ class export_service:
             "receipts": self.__convert_entities(self.__repo.data.get(reposity.receipt_key(), []))
         }
 
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, ensure_ascii=False, indent=2)
-
-        return True
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            raise operation_exception(f"Ошибка при экспорте данных: {str(e)}")
 
     def __convert_entities(self, entities: list) -> list:
+        """
+        Конвертирует список сущностей в сериализуемый формат
+        """
         result = []
         for entity in entities:
             converted = self.__convert_factory.convert(entity)
