@@ -12,7 +12,7 @@ class range_model(entity_model):
     @property
     def value(self) -> int:
         """
-        Значение коэффициента пересчета
+        Коэффициент пересчета
         """
         return self.__value
     
@@ -36,7 +36,7 @@ class range_model(entity_model):
 
     def root_base_unit(self):
         """
-        Возвращает корневую (базовую) единицу измерения
+        Возвращает корневую единицу измерения
         """
         if self.base is None:
             return self
@@ -45,17 +45,18 @@ class range_model(entity_model):
 
     def convert_to_root_base_unit(self, quantity: float) -> float:
         """
-        Конвертирует количество в корневые (базовые) единицы измерения
+        Конвертирует количество в базовые единицы
         """
         if self.base is None:
             return quantity
         else:
+            # Умножаем на коэффициент для перевода в базовые единицы
             return self.base.convert_to_root_base_unit(quantity * self.value)
 
     @staticmethod
     def create_kill():
         """
-        Создает единицу измерения - килограмм
+        Создает килограмм
         """
         inner_gramm = range_model.create_gramm()
         return range_model.create("киллограмм", 1000, inner_gramm)
@@ -63,14 +64,14 @@ class range_model(entity_model):
     @staticmethod
     def create_gramm():
         """
-        Создает единицу измерения - грамм
+        Создает грамм
         """
         return range_model.create("грамм", 1, None)
      
     @staticmethod
     def create(name: str, value: int, base):
         """
-        Универсальный метод создания единицы измерения
+        Создает единицу измерения
         """
         validator.validate(name, str)
         validator.validate(value, int)
@@ -87,7 +88,7 @@ class range_model(entity_model):
     
     def from_dto(dto: range_dto, cache: dict):
         """
-        Фабричный метод создания из DTO
+        Создает из DTO
         """
         validator.validate(dto, range_dto)
         validator.validate(cache, dict)
