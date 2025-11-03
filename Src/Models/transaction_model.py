@@ -5,7 +5,7 @@ from Src.Core.validator import validator, argument_exception
 from datetime import datetime
 
 """
-Модель транзакции
+Модель транзакции движения товаров
 """
 class transaction_model(abstact_model):
     __date: datetime
@@ -14,7 +14,6 @@ class transaction_model(abstact_model):
     __quantity: float
     __unit: str
 
-    # Дата
     @property
     def date(self) -> datetime:
         return self.__date
@@ -24,7 +23,6 @@ class transaction_model(abstact_model):
         validator.validate(value, datetime)
         self.__date = value
 
-    # Номенклатура
     @property
     def nomenclature(self) -> nomenclature_model:
         return self.__nomenclature
@@ -34,7 +32,6 @@ class transaction_model(abstact_model):
         validator.validate(value, nomenclature_model)
         self.__nomenclature = value
 
-    # Склад
     @property
     def storage(self) -> storage_model:
         return self.__storage
@@ -44,7 +41,6 @@ class transaction_model(abstact_model):
         validator.validate(value, storage_model)
         self.__storage = value
 
-    # Количество
     @property
     def quantity(self) -> float:
         return self.__quantity
@@ -54,7 +50,6 @@ class transaction_model(abstact_model):
         validator.validate(value, (int, float))
         self.__quantity = float(value)
 
-    # Единица измерения
     @property
     def unit(self) -> str:
         return self.__unit
@@ -64,9 +59,18 @@ class transaction_model(abstact_model):
         validator.validate(value, str)
         self.__unit = value.strip()
 
-    """
-    Фабричный метод
-    """
+    def get_quantity_in_base_units(self) -> float:
+        """
+        Возвращает количество в базовых единицах измерения
+        """
+        if not self.nomenclature or not self.nomenclature.range:
+            return self.quantity
+        
+        range_obj = self.nomenclature.range
+        if range_obj.base:
+            return self.quantity * range_obj.value
+        return self.quantity
+
     @staticmethod
     def create(date: datetime, nomenclature: nomenclature_model, storage: storage_model, quantity: float, unit: str):
         item = transaction_model()
