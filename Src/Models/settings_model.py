@@ -8,6 +8,7 @@ from Src.Core.response_format import ResponseFormat
 class settings_model:
     __company: company_model = None
     __response_format: ResponseFormat = ResponseFormat.JSON
+    __is_first_start: bool = True
 
     # Текущая организация
     @property
@@ -28,3 +29,13 @@ class settings_model:
     def response_format(self, value: ResponseFormat):
         validator.validate(value, ResponseFormat)
         self.__response_format = value
+
+    # Первый старт
+    @property
+    def is_first_start(self) -> bool:
+        return self.__is_first_start
+
+    @is_first_start.setter
+    def is_first_start(self, value: bool):
+        validator.validate(value, bool)
+        self.__is_first_start = value
