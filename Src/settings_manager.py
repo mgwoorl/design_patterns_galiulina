@@ -8,18 +8,13 @@ from Src.Core.response_format import ResponseFormat
 import os
 import json
 
-
-####################################################3
-# Менеджер настроек.
-# Предназначен для управления настройками и хранения параметров приложения
+"""
+Менеджер настроек приложения
+"""
 class settings_manager:
-    # Наименование файла (полный путь)
     __full_file_name: str = ""
-
-    # Настройки
     __settings: settings_model = None
 
-    # Singletone
     def __new__(cls):
         if not hasattr(cls, 'instance'):
             cls.instance = super(settings_manager, cls).__new__(cls)
@@ -28,17 +23,14 @@ class settings_manager:
     def __init__(self):
         self.set_default()
 
-    # Текущие настройки
     @property
     def settings(self) -> settings_model:
         return self.__settings
 
-    # Текущий файл
     @property
     def file_name(self) -> str:
         return self.__full_file_name
 
-    # Полный путь к файлу настроек
     @file_name.setter
     def file_name(self, value: str):
         validator.validate(value, str)
@@ -48,7 +40,6 @@ class settings_manager:
         else:
             raise argument_exception(f'Не найден файл настроек {full_file_name}')
 
-    # Загрузить настройки из Json файла
     def load(self) -> bool:
         if self.__full_file_name == "":
             raise operation_exception("Не найден файл настроек!")
@@ -56,7 +47,6 @@ class settings_manager:
         with open(self.__full_file_name, 'r', encoding='utf-8') as file_instance:
             settings = json.load(file_instance)
 
-            # Обработка формата ответа
             if "response_format" in settings:
                 format_str = settings["response_format"].upper()
                 try:
@@ -64,7 +54,6 @@ class settings_manager:
                 except KeyError:
                     self.__settings.response_format = ResponseFormat.JSON
 
-            # Обработка первого старта
             if "is_first_start" in settings:
                 self.__settings.is_first_start = settings["is_first_start"]
 
@@ -74,7 +63,6 @@ class settings_manager:
 
         return False
 
-    # Сохранить настройки в файл
     def save(self) -> bool:
         if self.__full_file_name == "":
             raise operation_exception("Не указан файл для сохранения настроек!")
@@ -97,7 +85,6 @@ class settings_manager:
 
         return True
 
-    # Обработать полученный словарь
     def convert(self, data: dict) -> bool:
         validator.validate(data, dict)
 
@@ -109,7 +96,6 @@ class settings_manager:
 
         return True
 
-    # Параметры настроек по умолчанию
     def set_default(self):
         company = company_model()
         company.name = "Рога и копыта"
