@@ -11,13 +11,12 @@ class reposity:
         return self.__data
     
     """
-    Ключ для единц измерений
+    Ключ для единиц измерений
     """
     @staticmethod
     def range_key():
         return "range_model"
     
-
     """
     Ключ для категорий
     """
@@ -25,7 +24,6 @@ class reposity:
     def group_key():
         return "group_model"
     
-
     """
     Ключ для номенклатуры
     """
@@ -33,7 +31,6 @@ class reposity:
     def nomenclature_key():
         return "nomenclature_model"
     
-
     """
     Ключ для рецептов
     """
@@ -42,8 +39,21 @@ class reposity:
         return "receipt_model"
     
     """
+    Ключ для складов
+    """
+    @staticmethod
+    def storage_key():
+        return "storage_model"
+    
+    """
+    Ключ для транзакций
+    """
+    @staticmethod
+    def transaction_key():
+        return "transaction_model"
+    
+    """
     Получить список всех ключей
-    Источник: https://github.com/Alyona1619
     """
     @staticmethod
     def keys() -> list:
@@ -64,5 +74,3 @@ class reposity:
         keys = reposity.keys()
         for key in keys:
             self.__data[ key ] = []
-    
-    
