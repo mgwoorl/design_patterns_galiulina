@@ -2,14 +2,11 @@ from Src.Core.entity_model import entity_model
 from Src.Core.validator import validator
 
 """
-Модель склада
+Модель склада для хранения товаров
 """
 class storage_model(entity_model):
     __address:str = ""
 
-    """
-    Адрес
-    """
     @property
     def address(self) -> str:
         return self.__address.strip()
@@ -19,9 +16,6 @@ class storage_model(entity_model):
         validator.validate(value, str)
         self.__address = value.strip()
 
-    """
-    Фабричный метод
-    """
     @staticmethod
     def create(name: str, address: str = ""):
         item = storage_model()
