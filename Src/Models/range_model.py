@@ -6,14 +6,14 @@ from Src.Dtos.range_dto import range_dto
 Модель единицы измерения
 """
 class range_model(entity_model):
-    __value:int = 1
-    __base:'range_model' = None
+    __value: int = 1
+    __base: 'range_model' = None
 
-    """
-    Значение коэффициента пересчета
-    """
     @property
     def value(self) -> int:
+        """
+        Значение коэффициента пересчета
+        """
         return self.__value
     
     @value.setter
@@ -23,38 +23,55 @@ class range_model(entity_model):
              raise argument_exception("Некорректный аргумент!")
         self.__value = value
 
-
-    """
-    Базовая единица измерения
-    """
     @property
     def base(self):
+        """
+        Базовая единица измерения
+        """
         return self.__base
     
     @base.setter
     def base(self, value):
         self.__base = value
 
-    """
-    Киллограмм
-    """
+    def root_base_unit(self):
+        """
+        Возвращает корневую (базовую) единицу измерения
+        """
+        if self.base is None:
+            return self
+        else:
+            return self.base.root_base_unit()
+
+    def convert_to_root_base_unit(self, quantity: float) -> float:
+        """
+        Конвертирует количество в корневые (базовые) единицы измерения
+        """
+        if self.base is None:
+            return quantity
+        else:
+            return self.base.convert_to_root_base_unit(quantity * self.value)
+
     @staticmethod
     def create_kill():
+        """
+        Создает единицу измерения - килограмм
+        """
         inner_gramm = range_model.create_gramm()
-        return range_model.create(  "киллограмм", inner_gramm)
+        return range_model.create("киллограмм", 1000, inner_gramm)
 
-    """
-    Грамм
-    """
     @staticmethod
     def create_gramm():
-        return range_model.create("грамм")
+        """
+        Создает единицу измерения - грамм
+        """
+        return range_model.create("грамм", 1, None)
      
-    """
-    Универсальный метод - фабричный
-    """
     @staticmethod
-    def create(name:str, value:int, base ):
+    def create(name: str, value: int, base):
+        """
+        Универсальный метод создания единицы измерения
+        """
         validator.validate(name, str)
         validator.validate(value, int)
 
@@ -68,13 +85,12 @@ class range_model(entity_model):
         item.value = value
         return item
     
-    """
-    Фабричный метод из Dto
-    """
-    def from_dto(dto:range_dto, cache:dict):
+    def from_dto(dto: range_dto, cache: dict):
+        """
+        Фабричный метод создания из DTO
+        """
         validator.validate(dto, range_dto)
         validator.validate(cache, dict)
-        base  = cache[ dto.base_id ] if dto.base_id in cache else None
+        base = cache[dto.base_id] if dto.base_id in cache else None
         item = range_model.create(dto.name, dto.value, base)
         return item
-    
