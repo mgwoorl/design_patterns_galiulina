@@ -17,6 +17,8 @@ from datetime import datetime
 """
 Сервис инициализации приложения
 """
+
+
 class start_service:
     __repo: reposity = reposity()
     __default_receipt: receipt_model
@@ -121,12 +123,12 @@ class start_service:
         try:
             storage1 = storage_model.create("Главный склад", "ул. Промышленная, 25")
             storage1.unique_code = "42221216-243e-4736-b841-99b52fca79cf"
-            
+
             storage2 = storage_model.create("Запасной склад", "ул. Складская, 8")
             storage2.unique_code = "1940adfe-dbe8-4336-b3b0-3c1864881de5"
-            
+
             self.__repo.data[reposity.storage_key()].extend([storage1, storage2])
-            
+
         except Exception as e:
             raise operation_exception(f"Ошибка создания складов: {str(e)}")
 
@@ -137,19 +139,20 @@ class start_service:
         try:
             storages = self.__repo.data.get(reposity.storage_key(), [])
             nomenclatures = self.__repo.data.get(reposity.nomenclature_key(), [])
-            
+
             self.__repo.data[reposity.transaction_key()] = []
-            
+
             if not storages or not nomenclatures:
                 return
 
             main_storage = storages[0]
-            
+
             flour_nom = next((n for n in nomenclatures if "мука" in n.name.lower()), None)
             sugar_nom = next((n for n in nomenclatures if "сахар" in n.name.lower()), None)
-            
+
             transactions = []
-            
+
+            # Создаем транзакции в граммах
             if flour_nom:
                 transactions.extend([
                     transaction_model.create(
@@ -161,7 +164,7 @@ class start_service:
                         flour_nom, main_storage, -50.0, "г"
                     )
                 ])
-            
+
             if sugar_nom:
                 transactions.extend([
                     transaction_model.create(
@@ -173,9 +176,9 @@ class start_service:
                         sugar_nom, main_storage, -75.0, "г"
                     )
                 ])
-                
+
             self.__repo.data[reposity.transaction_key()].extend(transactions)
-            
+
         except Exception as e:
             raise operation_exception(f"Ошибка создания транзакций: {str(e)}")
 
@@ -210,10 +213,10 @@ class start_service:
             self.__default_receipt.composition.append(item)
 
         self.__repo.data[reposity.receipt_key()].append(self.__default_receipt)
-        
+
         self.__create_storages()
         self.__create_transactions()
-        
+
         return True
 
     @property
