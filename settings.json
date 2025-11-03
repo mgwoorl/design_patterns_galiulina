@@ -3,7 +3,11 @@
     "response_format": "markdown",
     "company": {
         "name": "Рога и копыта",
-        "inn": 123456789
+        "inn": 123456789,
+        "bic": 123456789,
+        "corr_account": 12345678901,
+        "account": 12345678901,
+        "ownership": "ООО"
     },
     "default_receipt": {
         "name": "ВАФЛИ ХРУСТЯЩИЕ В ВАФЕЛЬНИЦЕ",
