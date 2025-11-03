@@ -53,27 +53,49 @@ class settings_manager:
         if self.__full_file_name == "":
             raise operation_exception("Не найден файл настроек!")
 
-        try:
-            with open(self.__full_file_name, 'r', encoding='utf-8') as file_instance:
-                settings = json.load(file_instance)
+        with open(self.__full_file_name, 'r', encoding='utf-8') as file_instance:
+            settings = json.load(file_instance)
 
-                # Обработка формата ответа (НОВОЕ)
-                if "response_format" in settings:
-                    format_str = settings["response_format"].upper()
-                    try:
-                        self.__settings.response_format = ResponseFormat[format_str]
-                    except KeyError:
-                        # Значение по умолчанию при ошибке
-                        self.__settings.response_format = ResponseFormat.JSON
+            # Обработка формата ответа
+            if "response_format" in settings:
+                format_str = settings["response_format"].upper()
+                try:
+                    self.__settings.response_format = ResponseFormat[format_str]
+                except KeyError:
+                    self.__settings.response_format = ResponseFormat.JSON
 
-                if "company" in settings.keys():
-                    data = settings["company"]
-                    return self.convert(data)
+            # Обработка первого старта
+            if "is_first_start" in settings:
+                self.__settings.is_first_start = settings["is_first_start"]
 
-            return False
-        except Exception as e:
-            print(f"Ошибка загрузки настроек: {e}")
-            return False
+            if "company" in settings.keys():
+                data = settings["company"]
+                return self.convert(data)
+
+        return False
+
+    # Сохранить настройки в файл
+    def save(self) -> bool:
+        if self.__full_file_name == "":
+            raise operation_exception("Не указан файл для сохранения настроек!")
+
+        settings_dict = {
+            "response_format": self.__settings.response_format.value,
+            "is_first_start": self.__settings.is_first_start,
+            "company": {
+                "name": self.__settings.company.name,
+                "inn": self.__settings.company.inn,
+                "bic": self.__settings.company.bic,
+                "corr_account": self.__settings.company.corr_account,
+                "account": self.__settings.company.account,
+                "ownership": self.__settings.company.ownership
+            }
+        }
+
+        with open(self.__full_file_name, 'w', encoding='utf-8') as file_instance:
+            json.dump(settings_dict, file_instance, ensure_ascii=False, indent=2)
+
+        return True
 
     # Обработать полученный словарь
     def convert(self, data: dict) -> bool:
@@ -82,11 +104,8 @@ class settings_manager:
         fields = common.get_fields(self.__settings.company)
         matching_keys = list(filter(lambda key: key in fields, data.keys()))
 
-        try:
-            for key in matching_keys:
-                setattr(self.__settings.company, key, data[key])
-        except:
-            return False
+        for key in matching_keys:
+            setattr(self.__settings.company, key, data[key])
 
         return True
 
@@ -98,5 +117,5 @@ class settings_manager:
 
         self.__settings = settings_model()
         self.__settings.company = company
-        # Устанавливаем формат по умолчанию (НОВОЕ)
         self.__settings.response_format = ResponseFormat.JSON
+        self.__settings.is_first_start = True
