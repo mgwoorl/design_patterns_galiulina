@@ -45,6 +45,9 @@ class start_service:
             raise argument_exception(f'Не найден файл {full_file_name}')
 
     def load(self) -> bool:
+        """
+        Загружает данные из файла настроек
+        """
         if self.__full_file_name == "":
             raise operation_exception("Не найден файл!")
 
@@ -58,12 +61,18 @@ class start_service:
         return False
 
     def __save_item(self, key: str, dto, item):
+        """
+        Сохраняет элемент в репозиторий
+        """
         validator.validate(key, str)
         item.unique_code = dto.id
         self.__cache.setdefault(dto.id, item)
         self.__repo.data[key].append(item)
 
     def __convert_ranges(self, data: dict) -> bool:
+        """
+        Конвертирует данные единиц измерения
+        """
         validator.validate(data, dict)
         ranges = data['ranges'] if 'ranges' in data else []
         if len(ranges) == 0:
@@ -76,6 +85,9 @@ class start_service:
         return True
 
     def __convert_groups(self, data: dict) -> bool:
+        """
+        Конвертирует данные групп
+        """
         validator.validate(data, dict)
         categories = data['categories'] if 'categories' in data else []
         if len(categories) == 0:
@@ -88,6 +100,9 @@ class start_service:
         return True
 
     def __convert_nomenclatures(self, data: dict) -> bool:
+        """
+        Конвертирует данные номенклатур
+        """
         validator.validate(data, dict)
         nomenclatures = data['nomenclatures'] if 'nomenclatures' in data else []
         if len(nomenclatures) == 0:
@@ -100,6 +115,9 @@ class start_service:
         return True
 
     def __create_storages(self):
+        """
+        Создает тестовые склады
+        """
         try:
             storage1 = storage_model.create("Главный склад", "ул. Промышленная, 25")
             storage1.unique_code = "42221216-243e-4736-b841-99b52fca79cf"
@@ -113,57 +131,58 @@ class start_service:
             raise operation_exception(f"Ошибка создания складов: {str(e)}")
 
     def __create_transactions(self):
+        """
+        Создает тестовые транзакции
+        """
         try:
             storages = self.__repo.data.get(reposity.storage_key(), [])
             nomenclatures = self.__repo.data.get(reposity.nomenclature_key(), [])
+            
+            self.__repo.data[reposity.transaction_key()] = []
             
             if not storages or not nomenclatures:
                 return
 
             main_storage = storages[0]
-            reserve_storage = storages[1] if len(storages) > 1 else storages[0]
             
-            flour_nom = next((n for n in nomenclatures if "мука" in n.name.lower()), nomenclatures[0])
+            flour_nom = next((n for n in nomenclatures if "мука" in n.name.lower()), None)
+            sugar_nom = next((n for n in nomenclatures if "сахар" in n.name.lower()), None)
+            
+            transactions = []
+            
             if flour_nom:
-                transaction1 = transaction_model.create(
-                    datetime(2024, 10, 1, 10, 0, 0),
-                    flour_nom,
-                    main_storage,
-                    100.0,
-                    "г"
-                )
-                transaction2 = transaction_model.create(
-                    datetime(2024, 10, 15, 14, 30, 0),
-                    flour_nom,
-                    main_storage,
-                    -50.0,
-                    "г"
-                )
-                self.__repo.data[reposity.transaction_key()].extend([transaction1, transaction2])
-
-            sugar_nom = next((n for n in nomenclatures if "сахар" in n.name.lower()), 
-                           nomenclatures[1] if len(nomenclatures) > 1 else nomenclatures[0])
+                transactions.extend([
+                    transaction_model.create(
+                        datetime(2024, 10, 1, 10, 0, 0),
+                        flour_nom, main_storage, 100.0, "г"
+                    ),
+                    transaction_model.create(
+                        datetime(2024, 10, 15, 14, 30, 0),
+                        flour_nom, main_storage, -50.0, "г"
+                    )
+                ])
+            
             if sugar_nom:
-                transaction3 = transaction_model.create(
-                    datetime(2024, 10, 20, 9, 15, 0),
-                    sugar_nom,
-                    reserve_storage,
-                    200.0,
-                    "г"
-                )
-                transaction4 = transaction_model.create(
-                    datetime(2024, 10, 25, 16, 45, 0),
-                    sugar_nom,
-                    reserve_storage,
-                    -75.0,
-                    "г"
-                )
-                self.__repo.data[reposity.transaction_key()].extend([transaction3, transaction4])
+                transactions.extend([
+                    transaction_model.create(
+                        datetime(2024, 10, 20, 9, 15, 0),
+                        sugar_nom, main_storage, 200.0, "г"
+                    ),
+                    transaction_model.create(
+                        datetime(2024, 10, 25, 16, 45, 0),
+                        sugar_nom, main_storage, -75.0, "г"
+                    )
+                ])
                 
+            self.__repo.data[reposity.transaction_key()].extend(transactions)
+            
         except Exception as e:
             raise operation_exception(f"Ошибка создания транзакций: {str(e)}")
 
     def convert(self, data: dict) -> bool:
+        """
+        Конвертирует данные из JSON в модели
+        """
         validator.validate(data, dict)
 
         cooking_time = data['cooking_time'] if 'cooking_time' in data else ""
@@ -199,9 +218,15 @@ class start_service:
 
     @property
     def data(self):
+        """
+        Возвращает репозиторий данных
+        """
         return self.__repo
 
     def start(self):
+        """
+        Запускает инициализацию приложения
+        """
         import os
         base_dir = os.path.dirname(os.path.abspath(__file__))
         self.file_name = os.path.join(base_dir, "..", "settings.json")
