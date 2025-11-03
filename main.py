@@ -1,5 +1,5 @@
 import connexion
-from flask import Response
+from flask import Response, request
 from Src.start_service import start_service
 from Src.Logics.factory_entities import factory_entities
 from Src.Models.settings_model import settings_model, ResponseFormat
@@ -12,12 +12,13 @@ from Src.Core.validator import argument_exception, operation_exception
 from datetime import datetime
 import json
 
+"""
+Главный модуль приложения
+"""
 app = connexion.FlaskApp(__name__)
 
-# Инициализация сервисов
 service = start_service()
 
-# Загрузка настроек и проверка первого старта
 settings_mgr = settings_manager()
 settings_mgr.file_name = "settings.json"
 settings_mgr.load()
@@ -35,11 +36,9 @@ factory = factory_entities(settings)
 osv_service_instance = osv_service(service.data)
 export_service_instance = export_service(service.data)
 
-
 @app.route("/api/accessibility", methods=['GET'])
 def accessibility():
     return "SUCCESS"
-
 
 @app.route("/api/entities", methods=['GET'])
 def get_entities():
@@ -47,7 +46,6 @@ def get_entities():
         "entities": ["ranges", "groups", "nomenclatures", "receipts", "storages", "transactions"],
         "formats": ["csv", "markdown", "json", "xml"]
     }
-
 
 @app.route("/api/data/<entity_type>/<format_type>", methods=['GET'])
 def get_data(entity_type: str, format_type: str):
@@ -66,7 +64,7 @@ def get_data(entity_type: str, format_type: str):
     if format_type not in ["csv", "markdown", "json", "xml"]:
         return {"error": f"Unknown format type: {format_type}"}, 400
 
-    data = service.data.get(entity_map[entity_type], [])
+    data = service.data.data.get(entity_map[entity_type], [])
 
     if not data:
         return {"error": f"No data for entity: {entity_type}"}, 404
@@ -87,10 +85,9 @@ def get_data(entity_type: str, format_type: str):
         content_type=content_types.get(format_type, "text/plain")
     )
 
-
 @app.route("/api/receipts", methods=['GET'])
 def get_receipts():
-    receipts = service.data.get(reposity.receipt_key(), [])
+    receipts = service.data.data.get(reposity.receipt_key(), [])
     factory = convert_factory()
 
     result = []
@@ -103,10 +100,9 @@ def get_receipts():
         content_type="application/json; charset=utf-8"
     )
 
-
 @app.route("/api/receipt/<receipt_id>", methods=['GET'])
 def get_receipt(receipt_id: str):
-    receipts = service.data.get(reposity.receipt_key(), [])
+    receipts = service.data.data.get(reposity.receipt_key(), [])
     factory = convert_factory()
 
     found_receipt = None
@@ -125,12 +121,11 @@ def get_receipt(receipt_id: str):
         content_type="application/json; charset=utf-8"
     )
 
-
 @app.route("/api/reports/osv", methods=['GET'])
 def get_osv_report():
-    start_date_str = connexion.request.args.get('start_date')
-    end_date_str = connexion.request.args.get('end_date')
-    storage_id = connexion.request.args.get('storage_id')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    storage_id = request.args.get('storage_id')
 
     if not all([start_date_str, end_date_str, storage_id]):
         return {"error": "Missing required parameters: start_date, end_date, storage_id"}, 400
@@ -139,26 +134,39 @@ def get_osv_report():
         start_date = datetime.fromisoformat(start_date_str)
         end_date = datetime.fromisoformat(end_date_str)
     except ValueError as e:
-        raise argument_exception(f"Неверный формат даты: {str(e)}")
+        return {"error": f"Invalid date format: {str(e)}"}, 400
 
-    report_data = osv_service_instance.generate_osv_report(start_date, end_date, storage_id)
+    try:
+        report_data = osv_service_instance.generate_osv_report(start_date, end_date, storage_id)
+        
+        return Response(
+            json.dumps(report_data, ensure_ascii=False, indent=2),
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except operation_exception as e:
+        return {"error": str(e)}, 400
+    except Exception as e:
+        return {"error": f"Internal server error: {str(e)}"}, 500
 
-    return Response(
-        json.dumps(report_data, ensure_ascii=False, indent=2),
-        content_type="application/json; charset=utf-8"
-    )
-
-
-@app.route("/api/save-to-file", methods=['POST'])
+@app.route("/api/save-to-file", methods=['POST', 'GET'])
 def save_to_file():
     filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    success = export_service_instance.export_all_data(filename)
-
-    if success:
-        return {"message": f"Data saved to {filename}", "filename": filename}
-    else:
-        return {"error": "Failed to save data"}, 500
-
+    
+    try:
+        success = export_service_instance.export_all_data(filename)
+        
+        if success:
+            return {
+                "message": f"Data saved to {filename}", 
+                "filename": filename,
+                "success": True
+            }
+        else:
+            return {"error": "Failed to save data", "success": False}, 500
+            
+    except Exception as e:
+        return {"error": str(e), "success": False}, 500
 
 if __name__ == '__main__':
     app.run(host="localhost", port=8080)
