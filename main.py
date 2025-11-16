@@ -170,7 +170,7 @@ def save_to_file():
     except Exception as e:
         return {"error": str(e), "success": False}, 500
 
-@app.route("/api/data/<model_type>/filter", methods=['POST'])
+@app.route("/api/filter/<model_type>", methods=['POST'])
 def get_filtered_data(model_type: str):
     """
     Фильтрация DOMAIN моделей через DTO фильтры
@@ -184,7 +184,7 @@ def get_filtered_data(model_type: str):
                 json.dumps({
                     "success": False,
                     "error": "Expected array of filters in request body"
-                }),
+                }, ensure_ascii=False),
                 status=400,
                 content_type="application/json; charset=utf-8"
             )
@@ -204,7 +204,7 @@ def get_filtered_data(model_type: str):
                 json.dumps({
                     "success": False,
                     "error": f"Unknown model type: {model_type}. Available: {list(model_map.keys())}"
-                }),
+                }, ensure_ascii=False),
                 status=400,
                 content_type="application/json; charset=utf-8"
             )
@@ -220,7 +220,7 @@ def get_filtered_data(model_type: str):
                     "success": True,
                     "count": 0,
                     "data": []
-                }),
+                }, ensure_ascii=False),
                 content_type="application/json; charset=utf-8"
             )
 
@@ -245,7 +245,7 @@ def get_filtered_data(model_type: str):
                 "success": True,
                 "count": len(filtered_data),
                 "data": result
-            }),
+            }, ensure_ascii=False, indent=2),
             content_type="application/json; charset=utf-8"
         )
         
@@ -254,7 +254,7 @@ def get_filtered_data(model_type: str):
             json.dumps({
                 "success": False,
                 "error": str(e)
-            }),
+            }, ensure_ascii=False),
             status=400,
             content_type="application/json; charset=utf-8"
         )
@@ -263,7 +263,7 @@ def get_filtered_data(model_type: str):
             json.dumps({
                 "success": False, 
                 "error": f"Internal server error: {str(e)}"
-            }),
+            }, ensure_ascii=False),
             status=500,
             content_type="application/json; charset=utf-8"
         )
@@ -282,7 +282,7 @@ def get_osv_report_with_filters():
                 json.dumps({
                     "success": False,
                     "error": "Expected array of filters in request body"
-                }),
+                }, ensure_ascii=False),
                 status=400,
                 content_type="application/json; charset=utf-8"
             )
@@ -300,7 +300,7 @@ def get_osv_report_with_filters():
                 "success": True,
                 "count": len(report_data),
                 "data": report_data
-            }),
+            }, ensure_ascii=False, indent=2),
             content_type="application/json; charset=utf-8"
         )
         
@@ -309,7 +309,7 @@ def get_osv_report_with_filters():
             json.dumps({
                 "success": False,
                 "error": str(e)
-            }),
+            }, ensure_ascii=False),
             status=400,
             content_type="application/json; charset=utf-8"
         )
@@ -318,7 +318,7 @@ def get_osv_report_with_filters():
             json.dumps({
                 "success": False, 
                 "error": f"Internal server error: {str(e)}"
-            }),
+            }, ensure_ascii=False),
             status=500,
             content_type="application/json; charset=utf-8"
         )
