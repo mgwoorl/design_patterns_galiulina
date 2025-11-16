@@ -17,7 +17,7 @@ class osv_service:
 
     def generate_osv_report(self, start_date: datetime, end_date: datetime, storage_id: str) -> list:
         """
-        Генерирует оборотно-сальдовую ведомость (старый метод для обратной совместимости)
+        Генерирует оборотно-сальдовую ведомость
         """
         validator.validate(start_date, datetime)
         validator.validate(end_date, datetime)
