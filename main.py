@@ -9,6 +9,8 @@ from Src.Logics.osv_service import osv_service
 from Src.Logics.export_service import export_service
 from Src.settings_manager import settings_manager
 from Src.Core.validator import argument_exception, operation_exception
+from Src.Dtos.filter_dto import filter_dto
+from Src.Core.prototype import prototype
 from datetime import datetime
 import json
 
@@ -167,6 +169,159 @@ def save_to_file():
             
     except Exception as e:
         return {"error": str(e), "success": False}, 500
+
+@app.route("/api/data/<model_type>/filter", methods=['POST'])
+def get_filtered_data(model_type: str):
+    """
+    Фильтрация DOMAIN моделей через DTO фильтры
+    Поддерживаемые model_type: ranges, groups, nomenclatures, receipts, storages, transactions
+    """
+    try:
+        filters_data = request.get_json()
+        
+        if not filters_data or not isinstance(filters_data, list):
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Expected array of filters in request body"
+                }),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+
+        # Маппинг типов моделей на ключи репозитория
+        model_map = {
+            "ranges": reposity.range_key(),
+            "groups": reposity.group_key(), 
+            "nomenclatures": reposity.nomenclature_key(),
+            "receipts": reposity.receipt_key(),
+            "storages": reposity.storage_key(),
+            "transactions": reposity.transaction_key()
+        }
+
+        if model_type not in model_map:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": f"Unknown model type: {model_type}. Available: {list(model_map.keys())}"
+                }),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+
+        # Получаем данные из репозитория
+        data_key = model_map[model_type]
+        data = service.data.data.get(data_key, [])
+        
+        # Проверяем что данные не пустые
+        if len(data) == 0:
+            return Response(
+                json.dumps({
+                    "success": True,
+                    "count": 0,
+                    "data": []
+                }),
+                content_type="application/json; charset=utf-8"
+            )
+
+        # Создаем DTO объекты из JSON
+        filters = []
+        for filter_item in filters_data:
+            filter_dto_obj = filter_dto().create(filter_item)
+            filters.append(filter_dto_obj)
+
+        # Применяем фильтрацию через прототип
+        filtered_data = prototype.filter(data, filters)
+
+        # Конвертируем результат в JSON
+        factory = convert_factory()
+        result = []
+        for item in filtered_data:
+            converted_item = factory.convert(item)
+            result.append(converted_item)
+
+        return Response(
+            json.dumps({
+                "success": True,
+                "count": len(filtered_data),
+                "data": result
+            }),
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except operation_exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": str(e)
+            }),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False, 
+                "error": f"Internal server error: {str(e)}"
+            }),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/reports/osv/filter", methods=['POST'])
+def get_osv_report_with_filters():
+    """
+    Генерация отчета ОСВ с использованием DTO фильтров
+    Принимает JSON с массивом фильтров в теле запроса
+    """
+    try:
+        filters_data = request.get_json()
+        
+        if not filters_data or not isinstance(filters_data, list):
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Expected array of filters in request body"
+                }),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+
+        # Создаем DTO объекты из JSON
+        filters = []
+        for filter_item in filters_data:
+            filter_dto_obj = filter_dto().create(filter_item)
+            filters.append(filter_dto_obj)
+
+        report_data = osv_service_instance.generate_osv_report_with_filters(filters)
+        
+        return Response(
+            json.dumps({
+                "success": True,
+                "count": len(report_data),
+                "data": report_data
+            }),
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except operation_exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": str(e)
+            }),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False, 
+                "error": f"Internal server error: {str(e)}"
+            }),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
 
 if __name__ == '__main__':
     app.run(host="localhost", port=8080)
