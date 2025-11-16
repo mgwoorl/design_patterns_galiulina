@@ -11,6 +11,8 @@ from Src.settings_manager import settings_manager
 from Src.Core.validator import argument_exception, operation_exception
 from Src.Dtos.filter_dto import filter_dto
 from Src.Core.prototype import prototype
+from Src.Core.filter_type import FilterType
+from Src.Core.common import common
 from datetime import datetime
 import json
 
@@ -38,9 +40,11 @@ factory = factory_entities(settings)
 osv_service_instance = osv_service(service.data)
 export_service_instance = export_service(service.data)
 
+
 @app.route("/api/accessibility", methods=['GET'])
 def accessibility():
     return "SUCCESS"
+
 
 @app.route("/api/entities", methods=['GET'])
 def get_entities():
@@ -48,6 +52,7 @@ def get_entities():
         "entities": ["ranges", "groups", "nomenclatures", "receipts", "storages", "transactions"],
         "formats": ["csv", "markdown", "json", "xml"]
     }
+
 
 @app.route("/api/data/<entity_type>/<format_type>", methods=['GET'])
 def get_data(entity_type: str, format_type: str):
@@ -87,6 +92,7 @@ def get_data(entity_type: str, format_type: str):
         content_type=content_types.get(format_type, "text/plain")
     )
 
+
 @app.route("/api/receipts", methods=['GET'])
 def get_receipts():
     receipts = service.data.data.get(reposity.receipt_key(), [])
@@ -101,6 +107,7 @@ def get_receipts():
         json.dumps(result, ensure_ascii=False, indent=2),
         content_type="application/json; charset=utf-8"
     )
+
 
 @app.route("/api/receipt/<receipt_id>", methods=['GET'])
 def get_receipt(receipt_id: str):
@@ -123,6 +130,7 @@ def get_receipt(receipt_id: str):
         content_type="application/json; charset=utf-8"
     )
 
+
 @app.route("/api/reports/osv", methods=['GET'])
 def get_osv_report():
     start_date_str = request.args.get('start_date')
@@ -140,45 +148,97 @@ def get_osv_report():
 
     try:
         report_data = osv_service_instance.generate_osv_report(start_date, end_date, storage_id)
-        
+
         return Response(
             json.dumps(report_data, ensure_ascii=False, indent=2),
             content_type="application/json; charset=utf-8"
         )
-        
+
     except operation_exception as e:
         return {"error": str(e)}, 400
     except Exception as e:
         return {"error": f"Internal server error: {str(e)}"}, 500
 
+
 @app.route("/api/save-to-file", methods=['POST', 'GET'])
 def save_to_file():
     filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    
+
     try:
         success = export_service_instance.export_all_data(filename)
-        
+
         if success:
             return {
-                "message": f"Data saved to {filename}", 
+                "message": f"Data saved to {filename}",
                 "filename": filename,
                 "success": True
             }
         else:
             return {"error": "Failed to save data", "success": False}, 500
-            
+
     except Exception as e:
         return {"error": str(e), "success": False}, 500
 
-@app.route("/api/filter/<model_type>", methods=['POST'])
-def get_filtered_data(model_type: str):
+@app.route("/api/filters/<model_type>", methods=['GET'])
+def get_filters_by_model(model_type: str):
     """
-    Фильтрация DOMAIN моделей через DTO фильтры
-    Поддерживаемые model_type: ranges, groups, nomenclatures, receipts, storages, transactions
+    Возвращает поля, по которым можно сделать фильтр, и типы фильтрации
+    """
+    model_map = {
+        "ranges": reposity.range_key(),
+        "groups": reposity.group_key(),
+        "nomenclatures": reposity.nomenclature_key(),
+        "receipts": reposity.receipt_key(),
+        "storages": reposity.storage_key(),
+        "transactions": reposity.transaction_key()
+    }
+
+    if model_type not in model_map:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Unknown model type: {model_type}"
+            }, ensure_ascii=False),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
+
+    data_key = model_map[model_type]
+    data = service.data.data.get(data_key, [])
+
+    if len(data) == 0:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"No data for model: {model_type}"
+            }, ensure_ascii=False),
+            status=404,
+            content_type="application/json; charset=utf-8"
+        )
+
+    first_elem = data[0]
+    fields_name = common.get_fields(first_elem)
+
+    result = {
+        "filter_field_names": fields_name,
+        "filter_types": FilterType.get_all_types()
+    }
+
+    return Response(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        status=200,
+        content_type="application/json; charset=utf-8"
+    )
+
+
+@app.route("/api/data/<model_type>/<format_type>", methods=['POST'])
+def get_data_filtered(model_type: str, format_type: str):
+    """
+    Получить отфильтрованные данные в указанном формате
     """
     try:
         filters_data = request.get_json()
-        
+
         if not filters_data or not isinstance(filters_data, list):
             return Response(
                 json.dumps({
@@ -189,10 +249,9 @@ def get_filtered_data(model_type: str):
                 content_type="application/json; charset=utf-8"
             )
 
-        # Маппинг типов моделей на ключи репозитория
         model_map = {
             "ranges": reposity.range_key(),
-            "groups": reposity.group_key(), 
+            "groups": reposity.group_key(),
             "nomenclatures": reposity.nomenclature_key(),
             "receipts": reposity.receipt_key(),
             "storages": reposity.storage_key(),
@@ -209,11 +268,19 @@ def get_filtered_data(model_type: str):
                 content_type="application/json; charset=utf-8"
             )
 
-        # Получаем данные из репозитория
+        if format_type not in ["csv", "markdown", "json", "xml"]:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": f"Unknown format type: {format_type}"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+
         data_key = model_map[model_type]
         data = service.data.data.get(data_key, [])
-        
-        # Проверяем что данные не пустые
+
         if len(data) == 0:
             return Response(
                 json.dumps({
@@ -224,31 +291,29 @@ def get_filtered_data(model_type: str):
                 content_type="application/json; charset=utf-8"
             )
 
-        # Создаем DTO объекты из JSON
         filters = []
         for filter_item in filters_data:
             filter_dto_obj = filter_dto().create(filter_item)
             filters.append(filter_dto_obj)
 
-        # Применяем фильтрацию через прототип
         filtered_data = prototype.filter(data, filters)
 
-        # Конвертируем результат в JSON
-        factory = convert_factory()
-        result = []
-        for item in filtered_data:
-            converted_item = factory.convert(item)
-            result.append(converted_item)
+        settings.response_format = ResponseFormat(format_type)
+        formatter = factory.create_default(filtered_data)
+        result = formatter.build(filtered_data)
+
+        content_types = {
+            "csv": "text/plain; charset=utf-8",
+            "markdown": "text/plain; charset=utf-8",
+            "json": "application/json; charset=utf-8",
+            "xml": "application/xml; charset=utf-8"
+        }
 
         return Response(
-            json.dumps({
-                "success": True,
-                "count": len(filtered_data),
-                "data": result
-            }, ensure_ascii=False, indent=2),
-            content_type="application/json; charset=utf-8"
+            result,
+            content_type=content_types.get(format_type, "text/plain")
         )
-        
+
     except operation_exception as e:
         return Response(
             json.dumps({
@@ -261,22 +326,22 @@ def get_filtered_data(model_type: str):
     except Exception as e:
         return Response(
             json.dumps({
-                "success": False, 
+                "success": False,
                 "error": f"Internal server error: {str(e)}"
             }, ensure_ascii=False),
             status=500,
             content_type="application/json; charset=utf-8"
         )
 
+
 @app.route("/api/reports/osv/filter", methods=['POST'])
 def get_osv_report_with_filters():
     """
     Генерация отчета ОСВ с использованием DTO фильтров
-    Принимает JSON с массивом фильтров в теле запроса
     """
     try:
         filters_data = request.get_json()
-        
+
         if not filters_data or not isinstance(filters_data, list):
             return Response(
                 json.dumps({
@@ -287,14 +352,13 @@ def get_osv_report_with_filters():
                 content_type="application/json; charset=utf-8"
             )
 
-        # Создаем DTO объекты из JSON
         filters = []
         for filter_item in filters_data:
             filter_dto_obj = filter_dto().create(filter_item)
             filters.append(filter_dto_obj)
 
         report_data = osv_service_instance.generate_osv_report_with_filters(filters)
-        
+
         return Response(
             json.dumps({
                 "success": True,
@@ -303,7 +367,7 @@ def get_osv_report_with_filters():
             }, ensure_ascii=False, indent=2),
             content_type="application/json; charset=utf-8"
         )
-        
+
     except operation_exception as e:
         return Response(
             json.dumps({
@@ -316,12 +380,13 @@ def get_osv_report_with_filters():
     except Exception as e:
         return Response(
             json.dumps({
-                "success": False, 
+                "success": False,
                 "error": f"Internal server error: {str(e)}"
             }, ensure_ascii=False),
             status=500,
             content_type="application/json; charset=utf-8"
         )
+
 
 if __name__ == '__main__':
     app.run(host="localhost", port=8080)
