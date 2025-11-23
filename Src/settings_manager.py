@@ -7,6 +7,7 @@ from Src.Core.common import common
 from Src.Core.response_format import ResponseFormat
 import os
 import json
+from datetime import datetime
 
 """
 Менеджер настроек приложения
@@ -57,6 +58,13 @@ class settings_manager:
             if "is_first_start" in settings:
                 self.__settings.is_first_start = settings["is_first_start"]
 
+            if "block_period" in settings and settings["block_period"]:
+                try:
+                    block_period = datetime.fromisoformat(settings["block_period"])
+                    self.__settings.block_period = block_period
+                except ValueError:
+                    self.__settings.block_period = None
+
             if "company" in settings.keys():
                 data = settings["company"]
                 return self.convert(data)
@@ -79,6 +87,10 @@ class settings_manager:
                 "ownership": self.__settings.company.ownership
             }
         }
+
+        # Добавляем дату блокировки если она установлена
+        if self.__settings.block_period:
+            settings_dict["block_period"] = self.__settings.block_period.isoformat()
 
         with open(self.__full_file_name, 'w', encoding='utf-8') as file_instance:
             json.dump(settings_dict, file_instance, ensure_ascii=False, indent=2)
@@ -105,3 +117,27 @@ class settings_manager:
         self.__settings.company = company
         self.__settings.response_format = ResponseFormat.JSON
         self.__settings.is_first_start = True
+        self.__settings.block_period = None
+
+    def set_block_period(self, block_period: datetime) -> bool:
+        """
+        Установка даты блокировки
+        
+        Args:
+            block_period (datetime): дата блокировки
+            
+        Returns:
+            bool: True если установка прошла успешно
+        """
+        validator.validate(block_period, datetime)
+        self.__settings.block_period = block_period
+        return self.save()
+
+    def get_block_period(self) -> datetime:
+        """
+        Получение текущей даты блокировки
+        
+        Returns:
+            datetime: дата блокировки или None
+        """
+        return self.__settings.block_period

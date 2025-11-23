@@ -1,6 +1,7 @@
 from Src.Models.company_model import company_model
 from Src.Core.validator import validator
 from Src.Core.response_format import ResponseFormat
+from datetime import datetime
 
 """
 Модель настроек приложения
@@ -9,6 +10,7 @@ class settings_model:
     __company: company_model = None
     __response_format: ResponseFormat = ResponseFormat.JSON
     __is_first_start: bool = True
+    __block_period: datetime = None
 
     @property
     def company(self) -> company_model:
@@ -36,3 +38,13 @@ class settings_model:
     def is_first_start(self, value: bool):
         validator.validate(value, bool)
         self.__is_first_start = value
+
+    @property
+    def block_period(self) -> datetime:
+        return self.__block_period
+
+    @block_period.setter
+    def block_period(self, value: datetime):
+        if value is not None:
+            validator.validate(value, datetime)
+        self.__block_period = value

@@ -53,6 +53,13 @@ class reposity:
         return "transaction_model"
     
     """
+    Ключ для кэша оборотов
+    """
+    @staticmethod
+    def turnover_cache_key():
+        return "turnover_cache_model"
+    
+    """
     Получить список всех ключей
     """
     @staticmethod
