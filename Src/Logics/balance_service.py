@@ -3,6 +3,8 @@ from Src.Logics.turnover_service import turnover_service
 from Src.Models.settings_model import settings_model
 from Src.Core.validator import validator, operation_exception, argument_exception
 from datetime import datetime
+from Src.Core.event_manager import event_manager
+from Src.Core.event_types import event_types
 
 """
 Сервис для расчета остатков с учетом даты блокировки
@@ -21,6 +23,15 @@ class balance_service:
         self.__repo = data
         self.__settings = settings
         self.__turnover_service = turnover_service(data)
+
+        event_manager.subscribe(
+            event_types.AFTER_UPDATE_NOMENCLATURE, 
+            self._on_nomenclature_updated
+        )
+        event_manager.subscribe(
+            event_types.AFTER_UPDATE_RANGE,
+            self._on_range_updated  
+        )
 
     def calculate_balance_with_block_period(self, target_date: datetime, storage_id: str = None) -> list:
         """
@@ -172,3 +183,27 @@ class balance_service:
                 })
         
         return result
+
+    def _on_nomenclature_updated(self, nomenclature):
+        """
+        Обработчик обновления номенклатуры
+        Пересчитывает остатки если установлена дата блокировки
+        """
+        if self.__settings.block_period:
+            try:
+                self.__turnover_service.calculate_turnovers_to_block_period(self.__settings.block_period)
+            except Exception:
+                # Игнорируем ошибки при пересчете
+                pass
+
+    def _on_range_updated(self, range_item):
+        """
+        Обработчик обновления единицы измерения
+        Пересчитывает остатки если установлена дата блокировки
+        """
+        if self.__settings.block_period:
+            try:
+                self.__turnover_service.calculate_turnovers_to_block_period(self.__settings.block_period)
+            except Exception:
+                # Игнорируем ошибки при пересчете
+                pass
