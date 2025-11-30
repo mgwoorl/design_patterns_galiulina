@@ -13,6 +13,8 @@ from Src.Dtos.filter_dto import filter_dto
 from Src.Core.prototype import prototype
 from Src.Core.filter_type import FilterType
 from Src.Core.common import common
+from Src.Logics.balance_service import balance_service
+from Src.Logics.turnover_service import turnover_service
 from datetime import datetime
 import json
 
@@ -39,12 +41,12 @@ factory = factory_entities(settings)
 
 osv_service_instance = osv_service(service.data)
 export_service_instance = export_service(service.data)
-
+balance_service_instance = balance_service(service.data, settings_mgr.settings)
+turnover_service_instance = turnover_service(service.data)
 
 @app.route("/api/accessibility", methods=['GET'])
 def accessibility():
     return "SUCCESS"
-
 
 @app.route("/api/entities", methods=['GET'])
 def get_entities():
@@ -52,7 +54,6 @@ def get_entities():
         "entities": ["ranges", "groups", "nomenclatures", "receipts", "storages", "transactions"],
         "formats": ["csv", "markdown", "json", "xml"]
     }
-
 
 @app.route("/api/data/<entity_type>/<format_type>", methods=['GET'])
 def get_data(entity_type: str, format_type: str):
@@ -92,7 +93,6 @@ def get_data(entity_type: str, format_type: str):
         content_type=content_types.get(format_type, "text/plain")
     )
 
-
 @app.route("/api/receipts", methods=['GET'])
 def get_receipts():
     receipts = service.data.data.get(reposity.receipt_key(), [])
@@ -107,7 +107,6 @@ def get_receipts():
         json.dumps(result, ensure_ascii=False, indent=2),
         content_type="application/json; charset=utf-8"
     )
-
 
 @app.route("/api/receipt/<receipt_id>", methods=['GET'])
 def get_receipt(receipt_id: str):
@@ -129,7 +128,6 @@ def get_receipt(receipt_id: str):
         json.dumps(converted_data, ensure_ascii=False, indent=2),
         content_type="application/json; charset=utf-8"
     )
-
 
 @app.route("/api/reports/osv", methods=['GET'])
 def get_osv_report():
@@ -158,7 +156,6 @@ def get_osv_report():
         return {"error": str(e)}, 400
     except Exception as e:
         return {"error": f"Internal server error: {str(e)}"}, 500
-
 
 @app.route("/api/save-to-file", methods=['POST', 'GET'])
 def save_to_file():
@@ -229,7 +226,6 @@ def get_filters_by_model(model_type: str):
         status=200,
         content_type="application/json; charset=utf-8"
     )
-
 
 @app.route("/api/data/<model_type>/<format_type>", methods=['POST'])
 def get_data_filtered(model_type: str, format_type: str):
@@ -333,7 +329,6 @@ def get_data_filtered(model_type: str, format_type: str):
             content_type="application/json; charset=utf-8"
         )
 
-
 @app.route("/api/reports/osv/filter", methods=['POST'])
 def get_osv_report_with_filters():
     """
@@ -387,6 +382,173 @@ def get_osv_report_with_filters():
             content_type="application/json; charset=utf-8"
         )
 
+@app.route("/api/settings/block-period", methods=['POST'])
+def set_block_period():
+    """
+    POST запрос для установки даты блокировки
+    """
+    try:
+        data = request.get_json()
+        
+        if not data or 'block_period' not in data:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing block_period parameter"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        try:
+            block_period = datetime.fromisoformat(data['block_period'])
+            
+            # Рассчитываем обороты до новой даты блокировки
+            turnover_service_instance.calculate_turnovers_to_block_period(block_period)
+            
+            # Сохраняем обороты в файл
+            turnover_service_instance.save_turnovers_to_file("turnovers_cache.json")
+            
+            # Устанавливаем дату блокировки 
+            success = settings_mgr.set_block_period(block_period)
+            
+            if success:
+                return Response(
+                    json.dumps({
+                        "success": True,
+                        "message": f"Block period set to {block_period.isoformat()}",
+                        "block_period": block_period.isoformat()
+                    }, ensure_ascii=False),
+                    status=200,
+                    content_type="application/json; charset=utf-8"
+                )
+            else:
+                return Response(
+                    json.dumps({
+                        "success": False,
+                        "error": "Failed to save block period"
+                    }, ensure_ascii=False),
+                    status=500,
+                    content_type="application/json; charset=utf-8"
+                )
+                
+        except ValueError as e:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": f"Invalid date format: {str(e)}"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+            
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/settings/block-period", methods=['GET'])
+def get_block_period():
+    """
+    GET запрос для получения текущей даты блокировки
+    """
+    try:
+        block_period = settings_mgr.get_block_period()
+        
+        result = {
+            "success": True,
+            "block_period": block_period.isoformat() if block_period else None
+        }
+        
+        return Response(
+            json.dumps(result, ensure_ascii=False),
+            status=200,
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/balances", methods=['GET'])
+def get_balances():
+    """
+    GET запрос для получения остатков на указанную дату
+    """
+    try:
+        date_str = request.args.get('date')
+        storage_id = request.args.get('storage_id')
+        
+        if not date_str:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing date parameter"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        try:
+            target_date = datetime.fromisoformat(date_str)
+            
+            # Загружаем кэшированные обороты из файла если есть
+            turnover_service_instance.load_turnovers_from_file("turnovers_cache.json")
+            
+            # Получаем остатки с учетом даты блокировки
+            balances = balance_service_instance.calculate_balance_with_block_period(
+                target_date, storage_id
+            )
+            
+            return Response(
+                json.dumps({
+                    "success": True,
+                    "count": len(balances),
+                    "data": balances
+                }, ensure_ascii=False, indent=2),
+                status=200,
+                content_type="application/json; charset=utf-8"
+            )
+            
+        except ValueError as e:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": f"Invalid date format: {str(e)}"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        except operation_exception as e:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": str(e)
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+            
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
 
 if __name__ == '__main__':
     app.run(host="localhost", port=8080)
