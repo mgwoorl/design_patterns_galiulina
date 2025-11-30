@@ -3,6 +3,8 @@ from datetime import datetime
 from Src.Core.validator import validator, operation_exception
 from Src.reposity import reposity
 from Src.Logics.convert_factory import convert_factory
+from Src.Core.event_manager import event_manager
+from Src.Core.event_types import event_types
 
 """
 Сервис для экспорта данных в файл
@@ -14,6 +16,11 @@ class export_service:
     def __init__(self, repository: reposity):
         self.__repo = repository
         self.__convert_factory = convert_factory()
+        
+        event_manager.subscribe(
+            event_types.DATA_EXPORT_NEEDED,
+            self._on_export_needed
+        )
 
     def export_all_data(self, file_path: str) -> bool:
         """
@@ -47,3 +54,14 @@ class export_service:
             converted = self.__convert_factory.convert(entity)
             result.append(converted)
         return result
+
+    def _on_export_needed(self):
+        """
+        Обработчик необходимости экспорта
+        Автоматически экспортирует данные при изменениях
+        """
+        try:
+            self.export_all_data("data.json")
+        except Exception:
+            # Игнорируем ошибки экспорта, чтобы не прерывать основной поток
+            pass
