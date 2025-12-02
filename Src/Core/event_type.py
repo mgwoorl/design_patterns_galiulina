@@ -54,15 +54,6 @@ class event_type:
     def after_create_storage() -> str:
         return "after_create_storage"
     
-    # Системные события
-    @staticmethod
-    def settings_changed() -> str:
-        return "settings_changed"
-    
-    @staticmethod
-    def data_export_needed() -> str:
-        return "data_export_needed"
-    
     # События зависимостей
     @staticmethod
     def check_dependencies() -> str:
@@ -72,10 +63,7 @@ class event_type:
     def update_dependencies() -> str:
         return "update_dependencies"
     
-    @staticmethod
-    def change_block_period() -> str:
-        return "change_block_period"
-    
+    # События справочников
     @staticmethod
     def add_reference() -> str:
         return "add_reference"
