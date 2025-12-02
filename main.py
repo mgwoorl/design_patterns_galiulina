@@ -17,6 +17,11 @@ from Src.Logics.balance_service import balance_service
 from Src.Logics.turnover_service import turnover_service
 from datetime import datetime
 import json
+from Src.Core.event_manager import event_manager
+from Src.Core.event_types import event_types
+from Src.Logics.reference_service import reference_service
+from Src.Logics.delete_validation_handler import delete_validation_handler
+from Src.Logics.update_processing_handler import update_processing_handler
 
 """
 Главный модуль приложения
@@ -43,6 +48,40 @@ osv_service_instance = osv_service(service.data)
 export_service_instance = export_service(service.data)
 balance_service_instance = balance_service(service.data, settings_mgr.settings)
 turnover_service_instance = turnover_service(service.data)
+reference_service_instance = reference_service(service.data)
+
+delete_handler = delete_validation_handler(service.data)
+update_handler = update_processing_handler(service.data)
+
+event_manager.subscribe(
+    event_types.BEFORE_DELETE_NOMENCLATURE,
+    lambda item_id: delete_handler.check_nomenclature_usage(item_id)
+)
+
+event_manager.subscribe(
+    event_types.BEFORE_DELETE_GROUP,
+    lambda item_id: delete_handler.check_group_usage(item_id)  
+)
+
+event_manager.subscribe(
+    event_types.BEFORE_DELETE_RANGE,
+    lambda item_id: delete_handler.check_range_usage(item_id)
+)
+
+event_manager.subscribe(
+    event_types.BEFORE_DELETE_STORAGE, 
+    lambda item_id: delete_handler.check_storage_usage(item_id)
+)
+
+event_manager.subscribe(
+    event_types.AFTER_UPDATE_NOMENCLATURE,
+    lambda item: update_handler.process_nomenclature_update(item)
+)
+
+event_manager.subscribe(
+    event_types.AFTER_UPDATE_RANGE,
+    lambda item: update_handler.process_range_update(item)
+)
 
 @app.route("/api/accessibility", methods=['GET'])
 def accessibility():
@@ -540,6 +579,255 @@ def get_balances():
                 content_type="application/json; charset=utf-8"
             )
             
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/<reference_type>", methods=['GET'])
+def get_reference_item(reference_type: str):
+    """
+    GET /api/[reference_type] - получение одного элемента
+    """
+    try:
+        item_id = request.args.get('id')
+        
+        if not item_id:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing id parameter"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        item = reference_service_instance.get(reference_type, item_id)
+        
+        if not item:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": f"Item with id {item_id} not found"
+                }, ensure_ascii=False),
+                status=404,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        # Конвертируем в JSON
+        factory = convert_factory()
+        converted_data = factory.convert(item)
+        
+        return Response(
+            json.dumps({
+                "success": True,
+                "data": converted_data
+            }, ensure_ascii=False, indent=2),
+            status=200,
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except operation_exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": str(e)
+            }, ensure_ascii=False),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/<reference_type>", methods=['PUT'])
+def create_reference_item(reference_type: str):
+    """
+    PUT /api/[reference_type] - добавление элемента
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing request body"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        item = reference_service_instance.add(reference_type, data)
+        
+        # Конвертируем в JSON
+        factory = convert_factory()
+        converted_data = factory.convert(item)
+        
+        return Response(
+            json.dumps({
+                "success": True,
+                "data": converted_data
+            }, ensure_ascii=False, indent=2),
+            status=201,
+            content_type="application/json; charset=utf-8"
+        )
+        
+    except operation_exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": str(e)
+            }, ensure_ascii=False),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/<reference_type>", methods=['PATCH'])
+def update_reference_item(reference_type: str):
+    """
+    PATCH /api/[reference_type] - изменение элемента
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing request body"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        item_id = data.get('id')
+        if not item_id:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing id in request body"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        # Удаляем id из данных для обновления
+        update_data = {k: v for k, v in data.items() if k != 'id'}
+        
+        success = reference_service_instance.update(reference_type, item_id, update_data)
+        
+        if success:
+            # Получаем обновленный элемент
+            updated_item = reference_service_instance.get(reference_type, item_id)
+            factory = convert_factory()
+            converted_data = factory.convert(updated_item)
+            
+            return Response(
+                json.dumps({
+                    "success": True,
+                    "data": converted_data
+                }, ensure_ascii=False, indent=2),
+                status=200,
+                content_type="application/json; charset=utf-8"
+            )
+        else:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Failed to update item"
+                }, ensure_ascii=False),
+                status=500,
+                content_type="application/json; charset=utf-8"
+            )
+        
+    except operation_exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": str(e)
+            }, ensure_ascii=False),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": f"Internal server error: {str(e)}"
+            }, ensure_ascii=False),
+            status=500,
+            content_type="application/json; charset=utf-8"
+        )
+
+@app.route("/api/<reference_type>", methods=['DELETE'])
+def delete_reference_item(reference_type: str):
+    """
+    DELETE /api/[reference_type] - удаление элемента
+    """
+    try:
+        item_id = request.args.get('id')
+        
+        if not item_id:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Missing id parameter"
+                }, ensure_ascii=False),
+                status=400,
+                content_type="application/json; charset=utf-8"
+            )
+        
+        success = reference_service_instance.delete(reference_type, item_id)
+        
+        if success:
+            return Response(
+                json.dumps({
+                    "success": True,
+                    "message": f"Item {item_id} deleted successfully"
+                }, ensure_ascii=False),
+                status=200,
+                content_type="application/json; charset=utf-8"
+            )
+        else:
+            return Response(
+                json.dumps({
+                    "success": False,
+                    "error": "Failed to delete item"
+                }, ensure_ascii=False),
+                status=500,
+                content_type="application/json; charset=utf-8"
+            )
+        
+    except operation_exception as e:
+        return Response(
+            json.dumps({
+                "success": False,
+                "error": str(e)
+            }, ensure_ascii=False),
+            status=400,
+            content_type="application/json; charset=utf-8"
+        )
     except Exception as e:
         return Response(
             json.dumps({
