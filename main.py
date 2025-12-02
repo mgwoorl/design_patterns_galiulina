@@ -1,3 +1,6 @@
+"""
+Главный модуль приложения
+"""
 import connexion
 from flask import Response, request
 from Src.start_service import start_service
@@ -15,12 +18,13 @@ from Src.Core.filter_type import FilterType
 from Src.Core.common import common
 from Src.Logics.balance_service import balance_service
 from Src.Logics.turnover_service import turnover_service
+from Src.Logics.reference_service import reference_service
+from Src.Core.observe_service import observe_service
+from Src.Core.event_type import event_type
+from Src.Dtos.block_date_dto import block_date_dto
 from datetime import datetime
 import json
 
-"""
-Главный модуль приложения
-"""
 app = connexion.FlaskApp(__name__)
 
 service = start_service()
@@ -43,6 +47,8 @@ osv_service_instance = osv_service(service.data)
 export_service_instance = export_service(service.data)
 balance_service_instance = balance_service(service.data, settings_mgr.settings)
 turnover_service_instance = turnover_service(service.data)
+
+reference_service_instance = reference_service()
 
 @app.route("/api/accessibility", methods=['GET'])
 def accessibility():
@@ -96,11 +102,11 @@ def get_data(entity_type: str, format_type: str):
 @app.route("/api/receipts", methods=['GET'])
 def get_receipts():
     receipts = service.data.data.get(reposity.receipt_key(), [])
-    factory = convert_factory()
+    factory_conv = convert_factory()
 
     result = []
     for receipt in receipts:
-        converted_data = factory.convert(receipt)
+        converted_data = factory_conv.convert(receipt)
         result.append(converted_data)
 
     return Response(
@@ -111,7 +117,7 @@ def get_receipts():
 @app.route("/api/receipt/<receipt_id>", methods=['GET'])
 def get_receipt(receipt_id: str):
     receipts = service.data.data.get(reposity.receipt_key(), [])
-    factory = convert_factory()
+    factory_conv = convert_factory()
 
     found_receipt = None
     for receipt in receipts:
@@ -122,7 +128,7 @@ def get_receipt(receipt_id: str):
     if not found_receipt:
         return {"error": f"Receipt with id {receipt_id} not found"}, 404
 
-    converted_data = factory.convert(found_receipt)
+    converted_data = factory_conv.convert(found_receipt)
 
     return Response(
         json.dumps(converted_data, ensure_ascii=False, indent=2),
@@ -178,9 +184,6 @@ def save_to_file():
 
 @app.route("/api/filters/<model_type>", methods=['GET'])
 def get_filters_by_model(model_type: str):
-    """
-    Возвращает поля, по которым можно сделать фильтр, и типы фильтрации
-    """
     model_map = {
         "ranges": reposity.range_key(),
         "groups": reposity.group_key(),
@@ -229,9 +232,6 @@ def get_filters_by_model(model_type: str):
 
 @app.route("/api/data/<model_type>/<format_type>", methods=['POST'])
 def get_data_filtered(model_type: str, format_type: str):
-    """
-    Получить отфильтрованные данные в указанном формате
-    """
     try:
         filters_data = request.get_json()
 
@@ -331,9 +331,6 @@ def get_data_filtered(model_type: str, format_type: str):
 
 @app.route("/api/reports/osv/filter", methods=['POST'])
 def get_osv_report_with_filters():
-    """
-    Генерация отчета ОСВ с использованием DTO фильтров
-    """
     try:
         filters_data = request.get_json()
 
@@ -384,9 +381,6 @@ def get_osv_report_with_filters():
 
 @app.route("/api/settings/block-period", methods=['POST'])
 def set_block_period():
-    """
-    POST запрос для установки даты блокировки
-    """
     try:
         data = request.get_json()
         
@@ -403,16 +397,16 @@ def set_block_period():
         try:
             block_period = datetime.fromisoformat(data['block_period'])
             
-            # Рассчитываем обороты до новой даты блокировки
             turnover_service_instance.calculate_turnovers_to_block_period(block_period)
             
-            # Сохраняем обороты в файл
             turnover_service_instance.save_turnovers_to_file("turnovers_cache.json")
             
-            # Устанавливаем дату блокировки 
             success = settings_mgr.set_block_period(block_period)
             
             if success:
+                dto = block_date_dto().create({"new_block_date": block_period})
+                observe_service.create_event(event_type.change_block_period(), dto)
+                
                 return Response(
                     json.dumps({
                         "success": True,
@@ -454,9 +448,6 @@ def set_block_period():
 
 @app.route("/api/settings/block-period", methods=['GET'])
 def get_block_period():
-    """
-    GET запрос для получения текущей даты блокировки
-    """
     try:
         block_period = settings_mgr.get_block_period()
         
@@ -483,9 +474,6 @@ def get_block_period():
 
 @app.route("/api/balances", methods=['GET'])
 def get_balances():
-    """
-    GET запрос для получения остатков на указанную дату
-    """
     try:
         date_str = request.args.get('date')
         storage_id = request.args.get('storage_id')
@@ -503,10 +491,8 @@ def get_balances():
         try:
             target_date = datetime.fromisoformat(date_str)
             
-            # Загружаем кэшированные обороты из файла если есть
             turnover_service_instance.load_turnovers_from_file("turnovers_cache.json")
             
-            # Получаем остатки с учетом даты блокировки
             balances = balance_service_instance.calculate_balance_with_block_period(
                 target_date, storage_id
             )
@@ -550,5 +536,37 @@ def get_balances():
             content_type="application/json; charset=utf-8"
         )
 
-if __name__ == '__main__':
-    app.run(host="localhost", port=8080)
+@app.route("/api/reference/<reference_type>", methods=['GET'])
+def get_reference(reference_type: str):
+    """
+    Получить элемент справочника по ID
+    """
+    try:
+        item_id = request.args.get('id')
+        
+        if item_id:
+            factory_conv = convert_factory()
+            
+            model_map = {
+                "nomenclature": reposity.nomenclature_key(),
+                "group": reposity.group_key(),
+                "range": reposity.range_key(),
+                "storage": reposity.storage_key()
+            }
+            
+            if reference_type not in model_map:
+                return {"error": f"Unknown reference type: {reference_type}"}, 400
+            
+            key = model_map[reference_type]
+            items = service.data.data.get(key, [])
+            
+            item = None
+            for it in items:
+                if it.unique_code == item_id:
+                    item = it
+                    break
+            
+            if not item:
+                return {"error": f"Item with id {item_id} not found"}, 404
+            
+            result = factory
