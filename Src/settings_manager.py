@@ -1,3 +1,6 @@
+"""
+Менеджер настроек приложения
+"""
 from Src.Models.settings_model import settings_model
 from Src.Core.validator import argument_exception
 from Src.Core.validator import operation_exception
@@ -9,9 +12,6 @@ import os
 import json
 from datetime import datetime
 
-"""
-Менеджер настроек приложения
-"""
 class settings_manager:
     __full_file_name: str = ""
     __settings: settings_model = None
@@ -88,14 +88,53 @@ class settings_manager:
             }
         }
 
-        # Добавляем дату блокировки если она установлена
         if self.__settings.block_period:
             settings_dict["block_period"] = self.__settings.block_period.isoformat()
 
         with open(self.__full_file_name, 'w', encoding='utf-8') as file_instance:
             json.dump(settings_dict, file_instance, ensure_ascii=False, indent=2)
-
+        
+        self.__save_to_appsettings()
+        
         return True
+
+    def __save_to_appsettings(self):
+        """
+        Сохранить текущие данные в appsettings.json для наблюдателей
+        """
+        try:
+            from Src.start_service import start_service
+            from Src.Logics.convert_factory import convert_factory
+            from Src.reposity import reposity
+            
+            service = start_service()
+            factory = convert_factory()
+            
+            appsettings_data = {
+                "measure_model": [
+                    factory.convert(item) for item in service.data.data.get(reposity.range_key(), [])
+                ],
+                "nomenclature_group_model": [
+                    factory.convert(item) for item in service.data.data.get(reposity.group_key(), [])
+                ],
+                "nomenclature_model": [
+                    factory.convert(item) for item in service.data.data.get(reposity.nomenclature_key(), [])
+                ],
+                "storage_model": [
+                    factory.convert(item) for item in service.data.data.get(reposity.storage_key(), [])
+                ],
+                "first_start": self.__settings.is_first_start
+            }
+            
+            if self.__settings.block_period:
+                appsettings_data["block_date"] = self.__settings.block_period.strftime("%Y-%m-%d")
+            
+            appsettings_path = "appsettings.json"
+            with open(appsettings_path, 'w', encoding='utf-8') as f:
+                json.dump(appsettings_data, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"Ошибка при сохранении appsettings.json: {str(e)}")
 
     def convert(self, data: dict) -> bool:
         validator.validate(data, dict)
@@ -120,24 +159,9 @@ class settings_manager:
         self.__settings.block_period = None
 
     def set_block_period(self, block_period: datetime) -> bool:
-        """
-        Установка даты блокировки
-        
-        Args:
-            block_period (datetime): дата блокировки
-            
-        Returns:
-            bool: True если установка прошла успешно
-        """
         validator.validate(block_period, datetime)
         self.__settings.block_period = block_period
         return self.save()
 
     def get_block_period(self) -> datetime:
-        """
-        Получение текущей даты блокировки
-        
-        Returns:
-            datetime: дата блокировки или None
-        """
         return self.__settings.block_period
