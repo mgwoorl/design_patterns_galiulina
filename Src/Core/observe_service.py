@@ -1,5 +1,5 @@
 """
-Наблюдатель (сервис наблюдения)
+Реализация наблюдателя (сервис наблюдения)
 """
 from typing import Any, List
 from Src.Core.abstract_subscriber import abstract_subscriber
