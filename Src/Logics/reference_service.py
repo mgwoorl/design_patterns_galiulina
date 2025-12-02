@@ -2,12 +2,24 @@
 Сервис для работы со справочниками (Номенклатура, Группа, Единица измерения, Склад)
 Реализует операции добавления, изменения, удаления с использованием паттерна Наблюдатель
 """
-from Src.Core.validator import validator
+from Src.Core.validator import validator, argument_exception, operation_exception
 from Src.start_service import start_service
 from Src.Core.observe_service import observe_service
 from Src.Core.event_type import event_type
 from Src.Core.abstract_subscriber import abstract_subscriber
 from Src.Dtos.reference_dto import reference_dto
+from Src.reposity import reposity
+from Src.Models.nomenclature_model import nomenclature_model
+from Src.Models.group_model import group_model
+from Src.Models.range_model import range_model
+from Src.Models.storage_model import storage_model
+from Src.Dtos.nomenclature_dto import nomenclature_dto
+from Src.Dtos.category_dto import category_dto
+from Src.Dtos.range_dto import range_dto
+from Src.Logics.convert_factory import convert_factory
+from Src.Core.abstract_dto import object_to_dto
+from Src.Dtos.update_dependencies_dto import update_dependencies_dto
+from Src.Dtos.check_dependencies_dto import check_dependencies_dto
 
 class reference_service(abstract_subscriber):
     __service = start_service()
@@ -34,7 +46,6 @@ class reference_service(abstract_subscriber):
         validator.validate(reference, str)
         validator.validate(properties, dict)
         if "unique_code" not in properties:
-            from Src.Core.validator import argument_exception
             raise argument_exception("Отсутствует поле unique_code")
         params = reference_dto().create({
             "name": reference, 
@@ -51,7 +62,6 @@ class reference_service(abstract_subscriber):
         validator.validate(reference, str)
         validator.validate(properties, dict)
         if "unique_code" not in properties:
-            from Src.Core.validator import argument_exception
             raise argument_exception("Отсутствует поле unique_code")
         params = reference_dto().create({
             "name": reference, 
@@ -67,18 +77,8 @@ class reference_service(abstract_subscriber):
         super().handle(event, params)
 
         if event == event_type.add_reference():
-            from Src.Core.validator import argument_exception
             validator.validate(params, reference_dto)
             model_type = params.name
-
-            from Src.reposity import reposity
-            from Src.Models.nomenclature_model import nomenclature_model
-            from Src.Models.group_model import group_model
-            from Src.Models.range_model import range_model
-            from Src.Models.storage_model import storage_model
-            from Src.Dtos.nomenclature_dto import nomenclature_dto
-            from Src.Dtos.category_dto import category_dto
-            from Src.Dtos.range_dto import range_dto
 
             match = {
                 reposity.nomenclature_key(): (nomenclature_dto, nomenclature_model),
@@ -101,7 +101,6 @@ class reference_service(abstract_subscriber):
                 self.__service.data.data[model_type].append(model)
 
         elif event == event_type.change_reference():
-            from Src.Core.validator import operation_exception, argument_exception
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -114,21 +113,9 @@ class reference_service(abstract_subscriber):
             if not old_model:
                 raise operation_exception(f"Объект с кодом {params.id} не найден.")
 
-            from Src.Logics.convert_factory import convert_factory
-            from Src.Core.abstract_dto import object_to_dto
             factory = convert_factory()
-
             dto_dict = object_to_dto(factory.convert(old_model))
             dto_dict.update(params.model_dto_dict)
-
-            from Src.Models.nomenclature_model import nomenclature_model
-            from Src.Models.group_model import group_model
-            from Src.Models.range_model import range_model
-            from Src.Dtos.nomenclature_dto import nomenclature_dto
-            from Src.Dtos.category_dto import category_dto
-            from Src.Dtos.range_dto import range_dto
-            from Src.reposity import reposity
-            from Src.Dtos.update_dependencies_dto import update_dependencies_dto
 
             match = {
                 reposity.nomenclature_key(): (nomenclature_dto, nomenclature_model),
@@ -160,7 +147,6 @@ class reference_service(abstract_subscriber):
             self.__service.data.data[model_type].append(model)
 
         elif event == event_type.remove_reference():
-            from Src.Core.validator import operation_exception
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -173,7 +159,6 @@ class reference_service(abstract_subscriber):
             if not model:
                 raise operation_exception(f"Объект с кодом {params.id} не найден.")
 
-            from Src.Dtos.check_dependencies_dto import check_dependencies_dto
             check_dto = check_dependencies_dto().create({"model": model})
 
             observe_service.create_event(event_type.check_dependencies(), check_dto)
