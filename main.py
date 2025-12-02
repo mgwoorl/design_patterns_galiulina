@@ -569,4 +569,98 @@ def get_reference(reference_type: str):
             if not item:
                 return {"error": f"Item with id {item_id} not found"}, 404
             
-            result = factory
+            result = factory_conv.convert(item)
+            
+            return Response(
+                json.dumps(result, ensure_ascii=False, indent=2),
+                content_type="application/json; charset=utf-8"
+            )
+        else:
+            return {"error": "ID parameter is required for GET"}, 400
+            
+    except Exception as e:
+        return {"error": f"Internal server error: {str(e)}"}, 500
+
+@app.route("/api/reference/<reference_type>", methods=['PUT'])
+def add_reference(reference_type: str):
+    """
+    Добавить новый элемент справочника
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return {"error": "No data provided"}, 400
+        
+        reference_service.add(reference_type, data)
+        
+        return {
+            "success": True,
+            "message": f"Reference {reference_type} added successfully"
+        }
+            
+    except argument_exception as e:
+        return {"error": str(e)}, 400
+    except operation_exception as e:
+        return {"error": str(e)}, 400
+    except Exception as e:
+        return {"error": f"Internal server error: {str(e)}"}, 500
+
+@app.route("/api/reference/<reference_type>", methods=['PATCH'])
+def update_reference(reference_type: str):
+    """
+    Изменить элемент справочника
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return {"error": "No data provided"}, 400
+        
+        if 'unique_code' not in data:
+            return {"error": "unique_code is required"}, 400
+        
+        reference_service.change(reference_type, data)
+        
+        return {
+            "success": True,
+            "message": f"Reference {reference_type} updated successfully"
+        }
+            
+    except argument_exception as e:
+        return {"error": str(e)}, 400
+    except operation_exception as e:
+        return {"error": str(e)}, 404
+    except Exception as e:
+        return {"error": f"Internal server error: {str(e)}"}, 500
+
+@app.route("/api/reference/<reference_type>", methods=['DELETE'])
+def delete_reference(reference_type: str):
+    """
+    Удалить элемент справочника
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return {"error": "No data provided"}, 400
+        
+        if 'unique_code' not in data:
+            return {"error": "unique_code is required"}, 400
+        
+        reference_service.remove(reference_type, data)
+        
+        return {
+            "success": True,
+            "message": f"Reference {reference_type} deleted successfully"
+        }
+            
+    except argument_exception as e:
+        return {"error": str(e)}, 400
+    except operation_exception as e:
+        return {"error": str(e)}, 409
+    except Exception as e:
+        return {"error": f"Internal server error: {str(e)}"}, 500
+
+if __name__ == '__main__':
+    app.run(host="localhost", port=8080)
