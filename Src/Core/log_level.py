@@ -22,7 +22,7 @@ class LogLevel(Enum):
         """
         if not level_str:
             return LogLevel.INFO
-            
+
         level_map = {
             "DEBUG": LogLevel.DEBUG,
             "INFO": LogLevel.INFO,
