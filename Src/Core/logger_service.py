@@ -106,7 +106,18 @@ class logger_service(abstract_subscriber):
                 
         except Exception as e:
             # Используем значения по умолчанию при ошибке
-            print(f"[WARNING] Ошибка загрузки настроек логирования: {str(e)}")
+            try:
+                record = log_record(
+                    LogLevel.WARNING,
+                    f"Ошибка загрузки настроек логирования: {str(e)}. Используются значения по умолчанию",
+                    "logger_service"
+                )
+                # Пытаемся записать в консоль напрямую только если включен вывод в консоль
+                if self.__log_to_console:
+                    print(record.to_string(self.__log_format, self.__log_date_format))
+            except:
+                # Если даже это не работает, просто игнорируем ошибку
+                pass
     
     def __update_log_file(self):
         """
@@ -130,7 +141,17 @@ class logger_service(abstract_subscriber):
             # Создаем директорию если ее нет
             directory = os.path.dirname(self.__current_log_file)
             if directory and not os.path.exists(directory):
-                os.makedirs(directory)
+                try:
+                    os.makedirs(directory)
+                except Exception as e:
+                    # Логируем ошибку создания директории
+                    record = log_record(
+                        LogLevel.ERROR,
+                        f"Ошибка создания директории для логов: {str(e)}",
+                        "logger_service"
+                    )
+                    if self.__log_to_console:
+                        print(record.to_string(self.__log_format, self.__log_date_format))
     
     def __should_log(self, level: LogLevel) -> bool:
         """
@@ -159,19 +180,25 @@ class logger_service(abstract_subscriber):
             
         log_str = record.to_string(self.__log_format, self.__log_date_format) + "\n"
         
-        # Вывод в консоль
+        # Вывод в консоль (если включено в настройках)
         if self.__log_to_console:
             print(log_str, end='')
         
-        # Запись в файл
+        # Запись в файл (если включено в настройках)
         if self.__log_to_file and self.__current_log_file:
             try:
                 with open(self.__current_log_file, 'a', encoding='utf-8') as f:
                     f.write(log_str)
             except Exception as e:
-                # Если не удалось записать в файл, выводим в консоль
+                # Если не удалось записать в файл, и вывод в консоль не включен,
+                # пытаемся вывести ошибку через консоль
                 if not self.__log_to_console:
-                    print(f"{record.timestamp.strftime(self.__log_date_format)}\t[ERROR] [logger_service] Ошибка записи в файл: {str(e)}")
+                    error_record = log_record(
+                        LogLevel.ERROR,
+                        f"Ошибка записи в файл: {str(e)}",
+                        "logger_service"
+                    )
+                    print(error_record.to_string(self.__log_format, self.__log_date_format))
     
     def log(self, level: LogLevel, message: str, service: str, details: dict = None):
         """
