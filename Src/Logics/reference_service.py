@@ -17,7 +17,7 @@ from Src.Dtos.nomenclature_dto import nomenclature_dto
 from Src.Dtos.category_dto import category_dto
 from Src.Dtos.range_dto import range_dto
 from Src.Logics.convert_factory import convert_factory
-from Src.Core.abstract_dto import object_to_dto
+from Src.Core.abstract_dto import abstact_dto
 from Src.Dtos.update_dependencies_dto import update_dependencies_dto
 from Src.Dtos.check_dependencies_dto import check_dependencies_dto
 
@@ -35,6 +35,14 @@ class reference_service(abstract_subscriber):
     def add(reference: str, properties: dict):
         validator.validate(reference, str)
         validator.validate(properties, dict)
+
+        # Логируем операцию добавления
+        observe_service.create_event(event_type.info(), {
+            "message": f"Запрос на добавление элемента справочника {reference}",
+            "service": "reference_service",
+            "details": {"reference_type": reference, "properties": properties}
+        })
+
         params = reference_dto().create({"name": reference, "model_dto_dict": properties})
         observe_service.create_event(event_type.add_reference(), params)
 
@@ -47,6 +55,14 @@ class reference_service(abstract_subscriber):
         validator.validate(properties, dict)
         if "unique_code" not in properties:
             raise argument_exception("Отсутствует поле unique_code")
+
+        # Логируем операцию изменения
+        observe_service.create_event(event_type.info(), {
+            "message": f"Запрос на изменение элемента справочника {reference} с ID {properties['unique_code']}",
+            "service": "reference_service",
+            "details": {"reference_type": reference, "properties": properties}
+        })
+
         params = reference_dto().create({
             "name": reference, 
             "id": properties["unique_code"], 
@@ -63,6 +79,14 @@ class reference_service(abstract_subscriber):
         validator.validate(properties, dict)
         if "unique_code" not in properties:
             raise argument_exception("Отсутствует поле unique_code")
+
+        # Логируем операцию удаления
+        observe_service.create_event(event_type.info(), {
+            "message": f"Запрос на удаление элемента справочника {reference} с ID {properties['unique_code']}",
+            "service": "reference_service",
+            "details": {"reference_type": reference, "properties": properties}
+        })
+
         params = reference_dto().create({
             "name": reference, 
             "id": properties["unique_code"], 
@@ -77,6 +101,12 @@ class reference_service(abstract_subscriber):
         super().handle(event, params)
 
         if event == event_type.add_reference():
+            # Логируем начало обработки добавления
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Обработка добавления элемента справочника {params.name}",
+                "service": "reference_service"
+            })
+
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -88,10 +118,20 @@ class reference_service(abstract_subscriber):
             }
 
             if model_type not in match.keys():
-                raise argument_exception(f"Получена неизвестная модель {model_type}. Доступны только следующие модели: {list(match.keys())}")
+                error_msg = f"Получена неизвестная модель {model_type}. Доступны только следующие модели: {list(match.keys())}"
+                observe_service.create_event(event_type.error(), {
+                    "message": error_msg,
+                    "service": "reference_service"
+                })
+                raise argument_exception(error_msg)
 
             if match[model_type] is None:
-                raise argument_exception(f"Добавление для типа {model_type} не реализовано")
+                error_msg = f"Добавление для типа {model_type} не реализовано"
+                observe_service.create_event(event_type.error(), {
+                    "message": error_msg,
+                    "service": "reference_service"
+                })
+                raise argument_exception(error_msg)
 
             dto_class, model_class = match[model_type]
             dto = dto_class().create(params.model_dto_dict)
@@ -100,7 +140,29 @@ class reference_service(abstract_subscriber):
             if model not in self.__service.data.data[model_type]:
                 self.__service.data.data[model_type].append(model)
 
+                # Логируем успешное добавление
+                observe_service.create_event(event_type.info(), {
+                    "message": f"Элемент справочника {model_type} успешно добавлен",
+                    "service": "reference_service",
+                    "details": {
+                        "model_type": model_type,
+                        "model_id": model.unique_code,
+                        "model_name": model.name if hasattr(model, 'name') else 'N/A'
+                    }
+                })
+            else:
+                observe_service.create_event(event_type.warning(), {
+                    "message": f"Элемент справочника {model_type} уже существует",
+                    "service": "reference_service"
+                })
+
         elif event == event_type.change_reference():
+            # Логируем начало обработки изменения
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Обработка изменения элемента справочника {params.name} с ID {params.id}",
+                "service": "reference_service"
+            })
+
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -111,10 +173,15 @@ class reference_service(abstract_subscriber):
                     break
 
             if not old_model:
-                raise operation_exception(f"Объект с кодом {params.id} не найден.")
+                error_msg = f"Объект с кодом {params.id} не найден."
+                observe_service.create_event(event_type.error(), {
+                    "message": error_msg,
+                    "service": "reference_service"
+                })
+                raise operation_exception(error_msg)
 
             factory = convert_factory()
-            dto_dict = object_to_dto(factory.convert(old_model))
+            dto_dict = factory.convert(old_model)
             dto_dict.update(params.model_dto_dict)
 
             match = {
@@ -124,7 +191,12 @@ class reference_service(abstract_subscriber):
             }
 
             if model_type not in match:
-                raise argument_exception(f"Изменение для типа {model_type} не реализовано")
+                error_msg = f"Изменение для типа {model_type} не реализовано"
+                observe_service.create_event(event_type.error(), {
+                    "message": error_msg,
+                    "service": "reference_service"
+                })
+                raise argument_exception(error_msg)
 
             dto_class, model_class = match[model_type]
             dto = dto_class().create(dto_dict)
@@ -146,7 +218,25 @@ class reference_service(abstract_subscriber):
             self.__service.data.data[model_type].remove(old_model)
             self.__service.data.data[model_type].append(model)
 
+            # Логируем успешное изменение
+            observe_service.create_event(event_type.info(), {
+                "message": f"Элемент справочника {model_type} с ID {params.id} успешно изменен",
+                "service": "reference_service",
+                "details": {
+                    "model_type": model_type,
+                    "model_id": params.id,
+                    "old_model_name": old_model.name if hasattr(old_model, 'name') else 'N/A',
+                    "new_model_name": model.name if hasattr(model, 'name') else 'N/A'
+                }
+            })
+
         elif event == event_type.remove_reference():
+            # Логируем начало обработки удаления
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Обработка удаления элемента справочника {params.name} с ID {params.id}",
+                "service": "reference_service"
+            })
+
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -157,10 +247,26 @@ class reference_service(abstract_subscriber):
                     break
 
             if not model:
-                raise operation_exception(f"Объект с кодом {params.id} не найден.")
+                error_msg = f"Объект с кодом {params.id} не найден."
+                observe_service.create_event(event_type.error(), {
+                    "message": error_msg,
+                    "service": "reference_service"
+                })
+                raise operation_exception(error_msg)
 
             check_dto = check_dependencies_dto().create({"model": model})
 
             observe_service.create_event(event_type.check_dependencies(), check_dto)
 
             self.__service.data.data[model_type].remove(model)
+
+            # Логируем успешное удаление
+            observe_service.create_event(event_type.info(), {
+                "message": f"Элемент справочника {model_type} с ID {params.id} успешно удален",
+                "service": "reference_service",
+                "details": {
+                    "model_type": model_type,
+                    "model_id": params.id,
+                    "model_name": model.name if hasattr(model, 'name') else 'N/A'
+                }
+            })
