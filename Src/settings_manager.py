@@ -38,7 +38,7 @@ class settings_manager:
         full_file_name = os.path.abspath(value)
         if os.path.exists(full_file_name):
             self.__full_file_name = full_file_name.strip()
-            
+
             # Логируем установку файла настроек
             observe_service.create_event(event_type.debug(), {
                 "message": f"Установлен файл настроек: {full_file_name}",
@@ -180,15 +180,15 @@ class settings_manager:
 
         with open(self.__full_file_name, 'w', encoding='utf-8') as file_instance:
             json.dump(settings_dict, file_instance, ensure_ascii=False, indent=2)
-        
+
         self.__save_to_appsettings()
-        
+
         # Логируем успешное сохранение
         observe_service.create_event(event_type.info(), {
             "message": "Настройки сохранены успешно",
             "service": "settings_manager"
         })
-        
+
         return True
 
     def __save_to_appsettings(self):
@@ -225,12 +225,12 @@ class settings_manager:
             appsettings_path = "appsettings.json"
             with open(appsettings_path, 'w', encoding='utf-8') as f:
                 json.dump(appsettings_data, f, ensure_ascii=False, indent=2)
-                
+
             observe_service.create_event(event_type.debug(), {
                 "message": "Данные сохранены в appsettings.json",
                 "service": "settings_manager"
             })
-                
+
         except Exception as e:
             observe_service.create_event(event_type.error(), {
                 "message": f"Ошибка при сохранении appsettings.json: {str(e)}",
@@ -252,7 +252,7 @@ class settings_manager:
             old_value = getattr(self.__settings.company, key, None)
             setattr(self.__settings.company, key, data[key])
             new_value = data[key]
-            
+
             if old_value != new_value:
                 observe_service.create_event(event_type.debug(), {
                     "message": f"Изменено поле компании: {key}",
@@ -294,10 +294,10 @@ class settings_manager:
 
     def set_block_period(self, block_period: datetime) -> bool:
         validator.validate(block_period, datetime)
-        
+
         old_block_period = self.__settings.block_period
         self.__settings.block_period = block_period
-        
+
         # Логируем изменение даты блокировки
         observe_service.create_event(event_type.info(), {
             "message": "Изменение даты блокировки",
@@ -307,12 +307,12 @@ class settings_manager:
                 "new_block_period": block_period.isoformat()
             }
         })
-        
+
         return self.save()
 
     def get_block_period(self) -> datetime:
         block_period = self.__settings.block_period
-        
+
         observe_service.create_event(event_type.debug(), {
             "message": "Запрос даты блокировки",
             "service": "settings_manager",
@@ -320,5 +320,5 @@ class settings_manager:
                 "block_period": block_period.isoformat() if block_period else None
             }
         })
-        
+
         return block_period
