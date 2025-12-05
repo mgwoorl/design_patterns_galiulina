@@ -27,6 +27,12 @@ class reference_service(abstract_subscriber):
     def __init__(self):
         self.__service.start()
         observe_service.add(self)
+        
+        # Логируем инициализацию
+        observe_service.create_event(event_type.info(), {
+            "message": "Инициализация сервиса справочников",
+            "service": "reference_service"
+        })
 
     """
     Добавить элемент справочника
