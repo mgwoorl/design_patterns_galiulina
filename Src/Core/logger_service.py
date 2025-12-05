@@ -7,13 +7,16 @@ from Src.Core.abstract_subscriber import abstract_subscriber
 from Src.Core.validator import validator
 from Src.Core.observe_service import observe_service
 from Src.Core.event_type import event_type
-from Src.settings_manager import settings_manager
+import os
+import json
 
 class logger_service(abstract_subscriber):
     __min_level: LogLevel = LogLevel.DEBUG
     __log_to_console: bool = True
     __log_to_file: bool = False
     __file_path: str = "app.log"
+    __log_format: str = "[{level}] {timestamp} - {service}: {message}"
+    __log_date_format: str = "%Y-%m-%d %H:%M:%S"
     
     def __init__(self):
         # Загружаем настройки из settings.json
@@ -25,10 +28,6 @@ class logger_service(abstract_subscriber):
         Загрузить настройки логирования из settings.json
         """
         try:
-            # Пытаемся загрузить настройки логирования если они есть
-            import json
-            import os
-            
             if os.path.exists("settings.json"):
                 with open("settings.json", 'r', encoding='utf-8') as f:
                     settings = json.load(f)
@@ -56,6 +55,14 @@ class logger_service(abstract_subscriber):
                         # Файл для логирования
                         if "log_file" in logging_settings:
                             self.__file_path = logging_settings["log_file"]
+                        
+                        # Формат логов
+                        if "log_format" in logging_settings:
+                            self.__log_format = logging_settings["log_format"]
+                        
+                        # Формат даты
+                        if "log_date_format" in logging_settings:
+                            self.__log_date_format = logging_settings["log_date_format"]
                             
                 # Логируем успешную загрузку настроек
                 self.__write_log(log_record(
@@ -89,10 +96,31 @@ class logger_service(abstract_subscriber):
         Returns:
             bool: True если нужно логировать
         """
-        levels_order = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARNING, LogLevel.ERROR]
-        current_index = levels_order.index(level)
-        min_index = levels_order.index(self.__min_level)
-        return current_index >= min_index
+        return self.__min_level.includes(level)
+    
+    def __format_message(self, record: log_record) -> str:
+        """
+        Форматировать сообщение лога
+        
+        Args:
+            record (log_record): запись лога
+            
+        Returns:
+            str: отформатированное сообщение
+        """
+        timestamp_str = record.timestamp.strftime(self.__log_date_format)
+        message = self.__log_format
+        message = message.replace("{level}", record.level.value)
+        message = message.replace("{timestamp}", timestamp_str)
+        message = message.replace("{service}", record.service)
+        message = message.replace("{message}", record.message)
+        
+        if record.details:
+            import json
+            details_str = json.dumps(record.details, ensure_ascii=False, indent=2)
+            message += f"\n{details_str}"
+            
+        return message
     
     def __write_log(self, record: log_record):
         """
@@ -104,7 +132,7 @@ class logger_service(abstract_subscriber):
         if not self.__should_log(record.level):
             return
             
-        log_str = record.to_string() + "\n"
+        log_str = self.__format_message(record) + "\n"
         
         # Вывод в консоль
         if self.__log_to_console:
@@ -114,7 +142,6 @@ class logger_service(abstract_subscriber):
         if self.__log_to_file:
             try:
                 # Создаем директорию если ее нет
-                import os
                 directory = os.path.dirname(self.__file_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory)
@@ -124,7 +151,7 @@ class logger_service(abstract_subscriber):
             except Exception as e:
                 # Если не удалось записать в файл, выводим в консоль
                 if not self.__log_to_console:
-                    print(f"{record.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\t[ERROR] [logger_service] Ошибка записи в файл: {str(e)}")
+                    print(f"{record.timestamp.strftime(self.__log_date_format)}\t[ERROR] [logger_service] Ошибка записи в файл: {str(e)}")
     
     def log(self, level: LogLevel, message: str, service: str, details: dict = None):
         """
@@ -139,6 +166,50 @@ class logger_service(abstract_subscriber):
         record = log_record(level, message, service, details)
         self.__write_log(record)
     
+    def debug(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня DEBUG
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.DEBUG, message, service, details)
+    
+    def info(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня INFO
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.INFO, message, service, details)
+    
+    def warning(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня WARNING
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.WARNING, message, service, details)
+    
+    def error(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня ERROR
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.ERROR, message, service, details)
+    
     def handle(self, event: str, params):
         """
         Обработка событий логирования
@@ -151,24 +222,24 @@ class logger_service(abstract_subscriber):
         
         if event == event_type.debug():
             if isinstance(params, dict):
-                self.log(LogLevel.DEBUG, params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+                self.debug(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
             else:
-                self.log(LogLevel.DEBUG, str(params), "unknown")
+                self.debug(str(params), "unknown")
         elif event == event_type.info():
             if isinstance(params, dict):
-                self.log(LogLevel.INFO, params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+                self.info(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
             else:
-                self.log(LogLevel.INFO, str(params), "unknown")
+                self.info(str(params), "unknown")
         elif event == event_type.warning():
             if isinstance(params, dict):
-                self.log(LogLevel.WARNING, params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+                self.warning(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
             else:
-                self.log(LogLevel.WARNING, str(params), "unknown")
+                self.warning(str(params), "unknown")
         elif event == event_type.error():
             if isinstance(params, dict):
-                self.log(LogLevel.ERROR, params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+                self.error(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
             else:
-                self.log(LogLevel.ERROR, str(params), "unknown")
+                self.error(str(params), "unknown")
 
 # Глобальный экземпляр логгера
 logger = logger_service()
