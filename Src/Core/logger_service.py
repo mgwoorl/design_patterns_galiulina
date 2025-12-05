@@ -12,6 +12,7 @@ import json
 from datetime import datetime
 
 class logger_service(abstract_subscriber):
+    __instance = None
     __min_level: LogLevel = LogLevel.DEBUG
     __log_to_console: bool = True
     __log_to_file: bool = False
@@ -23,13 +24,20 @@ class logger_service(abstract_subscriber):
     __current_date: str = None
     __enable_daily_files: bool = True
     
+    def __new__(cls):
+        if cls.__instance is None:
+            cls.__instance = super(logger_service, cls).__new__(cls)
+        return cls.__instance
+    
     def __init__(self):
-        # Загружаем настройки из settings.json
-        self.__load_settings()
-        observe_service.add(self)
-        
-        # Инициализируем текущий файл лога
-        self.__update_log_file()
+        if not hasattr(self, '_initialized'):
+            # Загружаем настройки из settings.json
+            self.__load_settings()
+            observe_service.add(self)
+            
+            # Инициализируем текущий файл лога
+            self.__update_log_file()
+            self._initialized = True
     
     def __load_settings(self):
         """
@@ -98,11 +106,7 @@ class logger_service(abstract_subscriber):
                 
         except Exception as e:
             # Используем значения по умолчанию при ошибке
-            self.__write_log(log_record(
-                LogLevel.WARNING,
-                f"Ошибка загрузки настроек логирования: {str(e)}. Используются значения по умолчанию",
-                "logger_service"
-            ))
+            print(f"[WARNING] Ошибка загрузки настроек логирования: {str(e)}")
     
     def __update_log_file(self):
         """
@@ -140,30 +144,6 @@ class logger_service(abstract_subscriber):
         """
         return self.__min_level.includes(level)
     
-    def __format_message(self, record: log_record) -> str:
-        """
-        Форматировать сообщение лога
-        
-        Args:
-            record (log_record): запись лога
-            
-        Returns:
-            str: отформатированное сообщение
-        """
-        timestamp_str = record.timestamp.strftime(self.__log_date_format)
-        message = self.__log_format
-        message = message.replace("{level}", record.level.value)
-        message = message.replace("{timestamp}", timestamp_str)
-        message = message.replace("{service}", record.service)
-        message = message.replace("{message}", record.message)
-        
-        if record.details:
-            import json
-            details_str = json.dumps(record.details, ensure_ascii=False, indent=2)
-            message += f"\n{details_str}"
-            
-        return message
-    
     def __write_log(self, record: log_record):
         """
         Записать лог в соответствии с настройками
@@ -177,11 +157,11 @@ class logger_service(abstract_subscriber):
         # Обновляем файл если нужно
         self.__update_log_file()
             
-        log_str = self.__format_message(record) + "\n"
+        log_str = record.to_string(self.__log_format, self.__log_date_format) + "\n"
         
         # Вывод в консоль
         if self.__log_to_console:
-            print(log_str)
+            print(log_str, end='')
         
         # Запись в файл
         if self.__log_to_file and self.__current_log_file:
