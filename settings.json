@@ -1,6 +1,13 @@
 {
     "is_first_start": true,
     "response_format": "markdown",
+    "logging": {
+        "min_level": "DEBUG",
+        "output": "both",
+        "log_file": "logs/app.log",
+        "log_format": "[{level}] {timestamp} - {service}: {message}",
+        "log_date_format": "%Y-%m-%d %H:%M:%S"
+    },
     "company": {
         "name": "Рога и копыта",
         "inn": 123456789,

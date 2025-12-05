@@ -3,6 +3,8 @@ from Src.Models.nomenclature_model import nomenclature_model
 from Src.Models.range_model import range_model
 from Src.Dtos.filter_dto import filter_dto
 from Src.Core.prototype import prototype
+from Src.Core.observe_service import observe_service
+from Src.Core.event_type import event_type
 from datetime import datetime
 from Src.Core.validator import validator, operation_exception, argument_exception
 
@@ -14,6 +16,12 @@ class osv_service:
         if not isinstance(data, reposity):
             raise argument_exception("Некорректный тип данных")
         self.__repo = data
+        
+        # Логируем инициализацию сервиса
+        observe_service.create_event(event_type.info(), {
+            "message": "Инициализация сервиса ОСВ",
+            "service": "osv_service"
+        })
 
     def generate_osv_report(self, start_date: datetime, end_date: datetime, storage_id: str) -> list:
         """
@@ -31,8 +39,23 @@ class osv_service:
         validator.validate(end_date, datetime)
         validator.validate(storage_id, str)
 
+        # Логируем начало формирования отчета
+        observe_service.create_event(event_type.info(), {
+            "message": f"Формирование отчета ОСВ: {start_date} - {end_date}, склад: {storage_id}",
+            "service": "osv_service"
+        })
+
         if start_date > end_date:
-            raise operation_exception("Дата начала не может быть позже даты окончания")
+            error_msg = "Дата начала не может быть позже даты окончания"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service",
+                "details": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat()
+                }
+            })
+            raise operation_exception(error_msg)
 
         return self._generate_report_data(start_date, end_date, storage_id)
 
@@ -49,14 +72,42 @@ class osv_service:
         """
         validator.validate(filters, list)
 
+        # Логируем начало формирования отчета с фильтрами
+        observe_service.create_event(event_type.info(), {
+            "message": f"Формирование отчета ОСВ с фильтрами: {len(filters)} фильтров",
+            "service": "osv_service"
+        })
+
         if len(filters) == 0:
-            raise operation_exception("Не указаны фильтры для формирования отчета")
+            error_msg = "Не указаны фильтры для формирования отчета"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service"
+            })
+            raise operation_exception(error_msg)
 
         # Извлекаем параметры из фильтров
         start_date, end_date, storage_id = self._parse_filters(filters)
+        
+        observe_service.create_event(event_type.debug(), {
+            "message": "Параметры отчета извлечены из фильтров",
+            "service": "osv_service",
+            "details": {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "storage_id": storage_id,
+                "filters_count": len(filters)
+            }
+        })
 
         # Получаем базовые данные отчета с использованием прототипа
         report_data = self._generate_report_data_with_prototype(start_date, end_date, storage_id, filters)
+        
+        # Логируем результат формирования отчета
+        observe_service.create_event(event_type.info(), {
+            "message": f"Отчет ОСВ сформирован: {len(report_data)} позиций",
+            "service": "osv_service"
+        })
 
         return report_data
 
@@ -79,7 +130,23 @@ class osv_service:
         # Проверяем что склад существует
         storage = next((s for s in storages if s.unique_code == storage_id), None)
         if not storage:
-            raise operation_exception(f"Склад с ID {storage_id} не найден")
+            error_msg = f"Склад с ID {storage_id} не найден"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service"
+            })
+            raise operation_exception(error_msg)
+        
+        observe_service.create_event(event_type.debug(), {
+            "message": "Получены данные для отчета ОСВ",
+            "service": "osv_service",
+            "details": {
+                "transactions": len(transactions),
+                "nomenclatures": len(nomenclatures),
+                "storages": len(storages),
+                "selected_storage": storage.name
+            }
+        })
 
         result = []
 
@@ -126,6 +193,20 @@ class osv_service:
             }
 
             result.append(report_item)
+            
+            # Логируем детали по каждой номенклатуре
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Расчет для номенклатуры: {nomenclature.name}",
+                "service": "osv_service",
+                "details": {
+                    "nomenclature": nomenclature.name,
+                    "start_balance": display_start_balance,
+                    "income": display_income,
+                    "outcome": display_outcome,
+                    "end_balance": display_end_balance,
+                    "transactions_count": len(nom_transactions)
+                }
+            })
 
         return result
 
@@ -150,14 +231,33 @@ class osv_service:
         # Проверяем что склад существует
         storage = next((s for s in storages if s.unique_code == storage_id), None)
         if not storage:
-            raise operation_exception(f"Склад с ID {storage_id} не найден")
+            error_msg = f"Склад с ID {storage_id} не найден"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service"
+            })
+            raise operation_exception(error_msg)
 
         # Фильтруем номенклатуры с помощью прототипа
         nomenclature_filters = [f for f in filters if f.field_name not in ["period", "storage"]]
 
         if nomenclature_filters:
             # Используем прототип для фильтрации номенклатур
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Применение фильтров к номенклатурам: {len(nomenclature_filters)} фильтров",
+                "service": "osv_service"
+            })
+            
             filtered_nomenclatures = prototype.filter(nomenclatures, nomenclature_filters)
+            
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Результат фильтрации номенклатур",
+                "service": "osv_service",
+                "details": {
+                    "total_nomenclatures": len(nomenclatures),
+                    "filtered_nomenclatures": len(filtered_nomenclatures)
+                }
+            })
         else:
             filtered_nomenclatures = nomenclatures
 
@@ -235,23 +335,62 @@ class osv_service:
                         # Если указано равенство, используем эту дату как и начало и конец
                         start_date = date_value
                         end_date = date_value
+                        
+                    observe_service.create_event(event_type.debug(), {
+                        "message": f"Извлечена дата из фильтра: {date_value}",
+                        "service": "osv_service"
+                    })
+                        
                 except ValueError:
-                    raise operation_exception(f"Некорректный формат даты: {filter_item.value}")
+                    error_msg = f"Некорректный формат даты: {filter_item.value}"
+                    observe_service.create_event(event_type.error(), {
+                        "message": error_msg,
+                        "service": "osv_service"
+                    })
+                    raise operation_exception(error_msg)
             elif filter_item.field_name == "storage" and filter_item.type.value == "EQUALS":
                 storage_id = filter_item.value
+                observe_service.create_event(event_type.debug(), {
+                    "message": f"Извлечен ID склада из фильтра: {storage_id}",
+                    "service": "osv_service"
+                })
 
         # Проверяем что все обязательные параметры найдены
         if start_date is None:
-            raise operation_exception("Не указана начальная дата периода")
+            error_msg = "Не указана начальная дата периода"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service"
+            })
+            raise operation_exception(error_msg)
 
         if end_date is None:
-            raise operation_exception("Не указана конечная дата периода")
+            error_msg = "Не указана конечная дата периода"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service"
+            })
+            raise operation_exception(error_msg)
 
         if storage_id is None:
-            raise operation_exception("Не указан фильтр по складу")
+            error_msg = "Не указан фильтр по складу"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service"
+            })
+            raise operation_exception(error_msg)
 
         if start_date > end_date:
-            raise operation_exception("Дата начала не может быть позже даты окончания")
+            error_msg = "Дата начала не может быть позже даты окончания"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "osv_service",
+                "details": {
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat()
+                }
+            })
+            raise operation_exception(error_msg)
 
         return start_date, end_date, storage_id
 
