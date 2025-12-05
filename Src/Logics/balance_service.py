@@ -2,6 +2,8 @@ from Src.reposity import reposity
 from Src.Logics.turnover_service import turnover_service
 from Src.Models.settings_model import settings_model
 from Src.Core.validator import validator, operation_exception, argument_exception
+from Src.Core.observe_service import observe_service
+from Src.Core.event_type import event_type
 from datetime import datetime
 
 """
@@ -21,6 +23,12 @@ class balance_service:
         self.__repo = data
         self.__settings = settings
         self.__turnover_service = turnover_service(data)
+        
+        # Логируем инициализацию сервиса
+        observe_service.create_event(event_type.info(), {
+            "message": "Инициализация сервиса расчетов остатков",
+            "service": "balance_service"
+        })
 
     def calculate_balance_with_block_period(self, target_date: datetime, storage_id: str = None) -> list:
         """
@@ -35,31 +43,90 @@ class balance_service:
         """
         validator.validate(target_date, datetime)
         
+        # Логируем начало расчета
+        observe_service.create_event(event_type.info(), {
+            "message": f"Расчет остатков на дату: {target_date.isoformat()}",
+            "service": "balance_service",
+            "details": {
+                "target_date": target_date.isoformat(),
+                "storage_id": storage_id if storage_id else "все склады"
+            }
+        })
+        
         block_period = self.__settings.block_period
         
         if block_period is None:
             # Если дата блокировки не установлена, рассчитываем обычным способом
+            observe_service.create_event(event_type.debug(), {
+                "message": "Дата блокировки не установлена, используется простой расчет",
+                "service": "balance_service"
+            })
             return self._calculate_balance_simple(target_date, storage_id)
         
         # Проверяем, что целевая дата не раньше даты блокировки
         if target_date < block_period:
-            raise operation_exception("Целевая дата не может быть раньше даты блокировки")
+            error_msg = "Целевая дата не может быть раньше даты блокировки"
+            observe_service.create_event(event_type.error(), {
+                "message": error_msg,
+                "service": "balance_service",
+                "details": {
+                    "target_date": target_date.isoformat(),
+                    "block_period": block_period.isoformat()
+                }
+            })
+            raise operation_exception(error_msg)
         
         # Получаем кэшированные обороты до даты блокировки
         cached_turnovers = self.__turnover_service.get_cached_turnovers(block_period)
         
         # Если кэш отсутствует, рассчитываем его
         if not cached_turnovers:
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Кэш оборотов для даты блокировки {block_period.isoformat()} отсутствует, начинается расчет",
+                "service": "balance_service"
+            })
             self.__turnover_service.calculate_turnovers_to_block_period(block_period)
             cached_turnovers = self.__turnover_service.get_cached_turnovers(block_period)
+            observe_service.create_event(event_type.info(), {
+                "message": f"Кэш оборотов рассчитан: {len(cached_turnovers)} записей",
+                "service": "balance_service"
+            })
+        else:
+            observe_service.create_event(event_type.debug(), {
+                "message": f"Используется существующий кэш оборотов: {len(cached_turnovers)} записей",
+                "service": "balance_service"
+            })
         
         # Рассчитываем обороты с даты блокировки до целевой даты
+        observe_service.create_event(event_type.debug(), {
+            "message": f"Расчет оборотов с {block_period.isoformat()} по {target_date.isoformat()}",
+            "service": "balance_service"
+        })
+        
         recent_turnovers = self.__turnover_service.calculate_turnovers_for_period(
             block_period, target_date
         )
         
+        observe_service.create_event(event_type.debug(), {
+            "message": f"Обороты за период рассчитаны: {len(recent_turnovers)} записей",
+            "service": "balance_service"
+        })
+        
         # Объединяем и группируем результаты
-        return self._merge_and_group_turnovers(cached_turnovers, recent_turnovers, storage_id)
+        result = self._merge_and_group_turnovers(cached_turnovers, recent_turnovers, storage_id)
+        
+        # Логируем успешное завершение расчета
+        observe_service.create_event(event_type.info(), {
+            "message": f"Расчет остатков завершен: {len(result)} позиций",
+            "service": "balance_service",
+            "details": {
+                "target_date": target_date.isoformat(),
+                "block_period": block_period.isoformat(),
+                "results_count": len(result)
+            }
+        })
+        
+        return result
 
     def _calculate_balance_simple(self, target_date: datetime, storage_id: str = None) -> list:
         """
@@ -72,6 +139,11 @@ class balance_service:
         Returns:
             list: данные остатков
         """
+        observe_service.create_event(event_type.debug(), {
+            "message": f"Простой расчет остатков на дату: {target_date.isoformat()}",
+            "service": "balance_service"
+        })
+        
         transactions = self.__repo.data.get(reposity.transaction_key(), [])
         nomenclatures = self.__repo.data.get(reposity.nomenclature_key(), [])
         storages = self.__repo.data.get(reposity.storage_key(), [])
@@ -105,6 +177,11 @@ class balance_service:
                     "balance": balance,
                     "calculation_date": target_date
                 })
+        
+        observe_service.create_event(event_type.debug(), {
+            "message": f"Простой расчет завершен: {len(result)} позиций",
+            "service": "balance_service"
+        })
         
         return result
 
