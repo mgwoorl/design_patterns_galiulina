@@ -16,7 +16,7 @@ class log_record:
         validator.validate(level, LogLevel)
         validator.validate(message, str)
         validator.validate(service, str)
-        
+
         self.__timestamp = datetime.now()
         self.__level = level
         self.__message = message
@@ -56,12 +56,12 @@ class log_record:
             "service": self.__service,
             "message": self.__message
         }
-        
+
         if self.__details:
             result["details"] = self.__details
-            
+
         return result
-    
+
     def to_string(self, log_format: str = None, date_format: str = None) -> str:
         """
         Преобразовать запись лога в строку
@@ -77,14 +77,14 @@ class log_record:
             log_format = "[{level}] {timestamp} - {service}: {message}"
         if not date_format:
             date_format = "%Y-%m-%d %H:%M:%S"
-            
+
         timestamp_str = self.__timestamp.strftime(date_format)
         message = log_format
         message = message.replace("{level}", self.__level.value)
         message = message.replace("{timestamp}", timestamp_str)
         message = message.replace("{service}", self.__service)
         message = message.replace("{message}", self.__message)
-        
+
         if self.__details:
             import json
             try:
@@ -92,5 +92,5 @@ class log_record:
                 message += f"\n{details_str}"
             except:
                 message += f"\n{str(self.__details)}"
-            
+
         return message
