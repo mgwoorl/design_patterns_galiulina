@@ -23,7 +23,7 @@ class balance_service:
         self.__repo = data
         self.__settings = settings
         self.__turnover_service = turnover_service(data)
-        
+
         # Логируем инициализацию сервиса
         observe_service.create_event(event_type.info(), {
             "message": "Инициализация сервиса расчетов остатков",
@@ -42,7 +42,7 @@ class balance_service:
             list: данные остатков
         """
         validator.validate(target_date, datetime)
-        
+
         # Логируем начало расчета
         observe_service.create_event(event_type.info(), {
             "message": f"Расчет остатков на дату: {target_date.isoformat()}",
@@ -52,7 +52,7 @@ class balance_service:
                 "storage_id": storage_id if storage_id else "все склады"
             }
         })
-        
+
         block_period = self.__settings.block_period
         
         if block_period is None:
@@ -96,25 +96,25 @@ class balance_service:
                 "message": f"Используется существующий кэш оборотов: {len(cached_turnovers)} записей",
                 "service": "balance_service"
             })
-        
+
         # Рассчитываем обороты с даты блокировки до целевой даты
         observe_service.create_event(event_type.debug(), {
             "message": f"Расчет оборотов с {block_period.isoformat()} по {target_date.isoformat()}",
             "service": "balance_service"
         })
-        
+
         recent_turnovers = self.__turnover_service.calculate_turnovers_for_period(
             block_period, target_date
         )
-        
+
         observe_service.create_event(event_type.debug(), {
             "message": f"Обороты за период рассчитаны: {len(recent_turnovers)} записей",
             "service": "balance_service"
         })
-        
+
         # Объединяем и группируем результаты
         result = self._merge_and_group_turnovers(cached_turnovers, recent_turnovers, storage_id)
-        
+
         # Логируем успешное завершение расчета
         observe_service.create_event(event_type.info(), {
             "message": f"Расчет остатков завершен: {len(result)} позиций",
@@ -125,7 +125,7 @@ class balance_service:
                 "results_count": len(result)
             }
         })
-        
+
         return result
 
     def _calculate_balance_simple(self, target_date: datetime, storage_id: str = None) -> list:
@@ -143,7 +143,7 @@ class balance_service:
             "message": f"Простой расчет остатков на дату: {target_date.isoformat()}",
             "service": "balance_service"
         })
-        
+
         transactions = self.__repo.data.get(reposity.transaction_key(), [])
         nomenclatures = self.__repo.data.get(reposity.nomenclature_key(), [])
         storages = self.__repo.data.get(reposity.storage_key(), [])
@@ -177,12 +177,12 @@ class balance_service:
                     "balance": balance,
                     "calculation_date": target_date
                 })
-        
+
         observe_service.create_event(event_type.debug(), {
             "message": f"Простой расчет завершен: {len(result)} позиций",
             "service": "balance_service"
         })
-        
+
         return result
 
     def _merge_and_group_turnovers(self, cached_turnovers: list, recent_turnovers: list, storage_id: str = None) -> list:
