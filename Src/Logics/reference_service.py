@@ -35,14 +35,14 @@ class reference_service(abstract_subscriber):
     def add(reference: str, properties: dict):
         validator.validate(reference, str)
         validator.validate(properties, dict)
-        
+
         # Логируем операцию добавления
         observe_service.create_event(event_type.info(), {
             "message": f"Запрос на добавление элемента справочника {reference}",
             "service": "reference_service",
             "details": {"reference_type": reference, "properties": properties}
         })
-        
+
         params = reference_dto().create({"name": reference, "model_dto_dict": properties})
         observe_service.create_event(event_type.add_reference(), params)
 
@@ -55,14 +55,14 @@ class reference_service(abstract_subscriber):
         validator.validate(properties, dict)
         if "unique_code" not in properties:
             raise argument_exception("Отсутствует поле unique_code")
-        
+
         # Логируем операцию изменения
         observe_service.create_event(event_type.info(), {
             "message": f"Запрос на изменение элемента справочника {reference} с ID {properties['unique_code']}",
             "service": "reference_service",
             "details": {"reference_type": reference, "properties": properties}
         })
-        
+
         params = reference_dto().create({
             "name": reference, 
             "id": properties["unique_code"], 
@@ -79,14 +79,14 @@ class reference_service(abstract_subscriber):
         validator.validate(properties, dict)
         if "unique_code" not in properties:
             raise argument_exception("Отсутствует поле unique_code")
-        
+
         # Логируем операцию удаления
         observe_service.create_event(event_type.info(), {
             "message": f"Запрос на удаление элемента справочника {reference} с ID {properties['unique_code']}",
             "service": "reference_service",
             "details": {"reference_type": reference, "properties": properties}
         })
-        
+
         params = reference_dto().create({
             "name": reference, 
             "id": properties["unique_code"], 
@@ -106,7 +106,7 @@ class reference_service(abstract_subscriber):
                 "message": f"Обработка добавления элемента справочника {params.name}",
                 "service": "reference_service"
             })
-            
+
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -139,7 +139,7 @@ class reference_service(abstract_subscriber):
 
             if model not in self.__service.data.data[model_type]:
                 self.__service.data.data[model_type].append(model)
-                
+
                 # Логируем успешное добавление
                 observe_service.create_event(event_type.info(), {
                     "message": f"Элемент справочника {model_type} успешно добавлен",
@@ -162,7 +162,7 @@ class reference_service(abstract_subscriber):
                 "message": f"Обработка изменения элемента справочника {params.name} с ID {params.id}",
                 "service": "reference_service"
             })
-            
+
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -217,7 +217,7 @@ class reference_service(abstract_subscriber):
 
             self.__service.data.data[model_type].remove(old_model)
             self.__service.data.data[model_type].append(model)
-            
+
             # Логируем успешное изменение
             observe_service.create_event(event_type.info(), {
                 "message": f"Элемент справочника {model_type} с ID {params.id} успешно изменен",
@@ -236,7 +236,7 @@ class reference_service(abstract_subscriber):
                 "message": f"Обработка удаления элемента справочника {params.name} с ID {params.id}",
                 "service": "reference_service"
             })
-            
+
             validator.validate(params, reference_dto)
             model_type = params.name
 
@@ -259,7 +259,7 @@ class reference_service(abstract_subscriber):
             observe_service.create_event(event_type.check_dependencies(), check_dto)
 
             self.__service.data.data[model_type].remove(model)
-            
+
             # Логируем успешное удаление
             observe_service.create_event(event_type.info(), {
                 "message": f"Элемент справочника {model_type} с ID {params.id} успешно удален",
