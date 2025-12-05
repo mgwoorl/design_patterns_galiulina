@@ -16,7 +16,7 @@ class turnover_service:
         if not isinstance(data, reposity):
             raise argument_exception("Некорректный тип данных")
         self.__repo = data
-        
+
         # Логируем инициализацию сервиса
         observe_service.create_event(event_type.info(), {
             "message": "Инициализация сервиса расчетов оборотов",
@@ -35,7 +35,7 @@ class turnover_service:
             bool: True если расчет успешно завершен
         """
         validator.validate(block_period, datetime)
-        
+
         # Логируем начало расчета
         observe_service.create_event(event_type.info(), {
             "message": f"Расчет оборотов до даты блокировки: {block_period.isoformat()}",
@@ -52,12 +52,12 @@ class turnover_service:
         self._clear_cache_for_period(block_period)
         
         turnover_cache = []
-        
+
         observe_service.create_event(event_type.debug(), {
             "message": f"Начинается расчет по {len(nomenclatures)} номенклатурам и {len(storages)} складам",
             "service": "turnover_service"
         })
-        
+
         processed_count = 0
         for nomenclature in nomenclatures:
             for storage in storages:
@@ -94,7 +94,7 @@ class turnover_service:
         
         # Сохраняем кэш в репозиторий
         self.__repo.data[reposity.turnover_cache_key()].extend(turnover_cache)
-        
+
         # Логируем успешное завершение расчета
         observe_service.create_event(event_type.info(), {
             "message": f"Расчет оборотов завершен: создано {len(turnover_cache)} записей кэша",
@@ -105,7 +105,7 @@ class turnover_service:
                 "processed_combinations": processed_count
             }
         })
-        
+
         return True
 
     def _clear_cache_for_period(self, block_period: datetime):
@@ -121,7 +121,7 @@ class turnover_service:
             item for item in cache_data if item.period_end != block_period
         ]
         new_count = len(self.__repo.data[reposity.turnover_cache_key()])
-        
+
         if old_count != new_count:
             observe_service.create_event(event_type.debug(), {
                 "message": f"Очищен кэш для даты блокировки {block_period.isoformat()}: удалено {old_count - new_count} записей",
@@ -142,12 +142,12 @@ class turnover_service:
         
         cache_data = self.__repo.data.get(reposity.turnover_cache_key(), [])
         result = [item for item in cache_data if item.period_end == block_period]
-        
+
         observe_service.create_event(event_type.debug(), {
             "message": f"Запрос кэшированных оборотов для даты {block_period.isoformat()}: найдено {len(result)} записей",
             "service": "turnover_service"
         })
-        
+
         return result
 
     def calculate_turnovers_for_period(self, start_date: datetime, end_date: datetime) -> list:
@@ -172,7 +172,7 @@ class turnover_service:
                 "details": {"start_date": start_date.isoformat(), "end_date": end_date.isoformat()}
             })
             raise operation_exception(error_msg)
-        
+
         # Логируем начало расчета
         observe_service.create_event(event_type.info(), {
             "message": f"Расчет оборотов за период с {start_date.isoformat()} по {end_date.isoformat()}",
@@ -184,7 +184,7 @@ class turnover_service:
         storages = self.__repo.data.get(reposity.storage_key(), [])
         
         result = []
-        
+
         processed_count = 0
         for nomenclature in nomenclatures:
             for storage in storages:
@@ -213,7 +213,7 @@ class turnover_service:
                     'credit_turnover': credit_turnover
                 })
                 processed_count += 1
-        
+
         # Логируем результат расчета
         observe_service.create_event(event_type.info(), {
             "message": f"Расчет оборотов за период завершен: {len(result)} записей",
@@ -225,7 +225,7 @@ class turnover_service:
                 "processed_combinations": processed_count
             }
         })
-        
+
         return result
 
     def save_turnovers_to_file(self, file_path: str) -> bool:
@@ -244,7 +244,7 @@ class turnover_service:
             
             cache_data = self.__repo.data.get(reposity.turnover_cache_key(), [])
             factory = convert_factory()
-            
+
             # Логируем начало сохранения
             observe_service.create_event(event_type.info(), {
                 "message": f"Сохранение кэша оборотов в файл: {file_path}",
@@ -259,7 +259,7 @@ class turnover_service:
             
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(export_data, f, ensure_ascii=False, indent=2)
-                
+
             # Логируем успешное сохранение
             observe_service.create_event(event_type.info(), {
                 "message": f"Кэш оборотов успешно сохранен в файл: {file_path}",
@@ -294,7 +294,7 @@ class turnover_service:
                     "service": "turnover_service"
                 })
                 return False
-                
+
             # Логируем начало загрузки
             observe_service.create_event(event_type.info(), {
                 "message": f"Загрузка кэша оборотов из файла: {file_path}",
@@ -335,7 +335,7 @@ class turnover_service:
                     
                 self.__repo.data[reposity.turnover_cache_key()].append(cache_item)
                 loaded_count += 1
-                
+
             # Логируем успешную загрузку
             observe_service.create_event(event_type.info(), {
                 "message": f"Кэш оборотов успешно загружен из файла: {loaded_count} записей",
