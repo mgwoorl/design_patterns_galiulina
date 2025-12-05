@@ -61,3 +61,36 @@ class log_record:
             result["details"] = self.__details
             
         return result
+    
+    def to_string(self, log_format: str = None, date_format: str = None) -> str:
+        """
+        Преобразовать запись лога в строку
+        
+        Args:
+            log_format: формат строки
+            date_format: формат даты
+            
+        Returns:
+            str: строковое представление
+        """
+        if not log_format:
+            log_format = "[{level}] {timestamp} - {service}: {message}"
+        if not date_format:
+            date_format = "%Y-%m-%d %H:%M:%S"
+            
+        timestamp_str = self.__timestamp.strftime(date_format)
+        message = log_format
+        message = message.replace("{level}", self.__level.value)
+        message = message.replace("{timestamp}", timestamp_str)
+        message = message.replace("{service}", self.__service)
+        message = message.replace("{message}", self.__message)
+        
+        if self.__details:
+            import json
+            try:
+                details_str = json.dumps(self.__details, ensure_ascii=False, indent=2)
+                message += f"\n{details_str}"
+            except:
+                message += f"\n{str(self.__details)}"
+            
+        return message
