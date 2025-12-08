@@ -37,6 +37,8 @@ settings_mgr = settings_manager()
 settings_mgr.file_name = "settings.json"
 settings_mgr.load()
 
+logger.configure()
+
 if settings_mgr.settings.is_first_start:
     logger.info("Первый запуск приложения, загрузка начальных данных", "main")
     service.start()
