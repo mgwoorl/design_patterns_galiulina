@@ -52,6 +52,43 @@ class settings_manager:
             })
             raise argument_exception(error_msg)
 
+    def get_logging_settings(self) -> dict:
+        """
+        Получить настройки логирования
+        
+        Returns:
+            dict: словарь с настройками логирования
+        """
+        result = {
+            "min_level": "INFO",
+            "output": "both",
+            "log_directory": "logs",
+            "log_file_prefix": "app",
+            "enable_daily_files": True,
+            "log_format": "[{level}] {timestamp} - {service}: {message}",
+            "log_date_format": "%Y-%m-%d %H:%M:%S"
+        }
+        
+        try:
+            if self.__full_file_name and os.path.exists(self.__full_file_name):
+                with open(self.__full_file_name, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    if "logging" in settings:
+                        result.update(settings["logging"])
+                        
+                observe_service.create_event(event_type.debug(), {
+                    "message": "Настройки логирования загружены",
+                    "service": "settings_manager",
+                    "details": {"file": self.__full_file_name}
+                })
+        except Exception as e:
+            observe_service.create_event(event_type.warning(), {
+                "message": f"Ошибка при загрузке настроек логирования: {str(e)}",
+                "service": "settings_manager"
+            })
+            
+        return result
+
     def load(self) -> bool:
         if self.__full_file_name == "":
             error_msg = "Не найден файл настроек!"
