@@ -7,8 +7,8 @@ from Src.Core.abstract_subscriber import abstract_subscriber
 from Src.Core.validator import validator
 from Src.Core.observe_service import observe_service
 from Src.Core.event_type import event_type
+from Src.settings_manager import settings_manager
 import os
-import json
 from datetime import datetime
 
 class logger_service(abstract_subscriber):
@@ -23,6 +23,7 @@ class logger_service(abstract_subscriber):
     __current_log_file: str = None
     __current_date: str = None
     __enable_daily_files: bool = True
+    __initialized: bool = False
 
     def __new__(cls):
         if cls.__instance is None:
@@ -30,67 +31,93 @@ class logger_service(abstract_subscriber):
         return cls.__instance
 
     def __init__(self):
-        if not hasattr(self, '_initialized'):
-            # Загружаем настройки из settings.json
-            self.__load_settings()
+        if not self.__initialized:
             observe_service.add(self)
+            self.__initialized = True
+
+    def configure(self):
+        """
+        Настроить логгер из настроек приложения.
+        Должен вызываться после инициализации settings_manager.
+        """
+        try:
+            # Получаем настройки через settings_manager
+            settings_mgr = settings_manager()
+            if not hasattr(settings_mgr, '_settings_manager__settings'):
+                # Если настройки еще не загружены, используем значения по умолчанию
+                self.__log_to_console = True
+                self.__log_to_file = False
+                self.__min_level = LogLevel.INFO
+                return
+            
+            # Получаем настройки логирования
+            logging_settings = settings_mgr.get_logging_settings()
+            
+            # Минимальный уровень
+            if "min_level" in logging_settings:
+                self.__min_level = LogLevel.from_string(logging_settings["min_level"])
+            else:
+                self.__min_level = LogLevel.INFO
+
+            # Куда выводить
+            if "output" in logging_settings:
+                output = logging_settings["output"].lower()
+                if output == "console":
+                    self.__log_to_console = True
+                    self.__log_to_file = False
+                elif output == "file":
+                    self.__log_to_console = False
+                    self.__log_to_file = True
+                elif output == "both":
+                    self.__log_to_console = True
+                    self.__log_to_file = True
+                else:
+                    # Значение по умолчанию
+                    self.__log_to_console = True
+                    self.__log_to_file = False
+            else:
+                self.__log_to_console = True
+                self.__log_to_file = False
+
+            # Директория для логов
+            if "log_directory" in logging_settings:
+                self.__log_directory = logging_settings["log_directory"]
+            else:
+                self.__log_directory = "logs"
+
+            # Префикс файла
+            if "log_file_prefix" in logging_settings:
+                self.__log_file_prefix = logging_settings["log_file_prefix"]
+            else:
+                self.__log_file_prefix = "app"
+
+            # Формат логов
+            if "log_format" in logging_settings:
+                self.__log_format = logging_settings["log_format"]
+            else:
+                self.__log_format = "[{level}] {timestamp} - {service}: {message}"
+
+            # Формат даты
+            if "log_date_format" in logging_settings:
+                self.__log_date_format = logging_settings["log_date_format"]
+            else:
+                self.__log_date_format = "%Y-%m-%d %H:%M:%S"
+
+            # Дополнительные настройки
+            if "enable_daily_files" in logging_settings:
+                self.__enable_daily_files = logging_settings["enable_daily_files"]
+            else:
+                self.__enable_daily_files = True
 
             # Инициализируем текущий файл лога
             self.__update_log_file()
-            self._initialized = True
 
-    def __load_settings(self):
-        """
-        Загрузить настройки логирования из settings.json
-        """
-        try:
-            if os.path.exists("settings.json"):
-                with open("settings.json", 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-
-                    if "logging" in settings:
-                        logging_settings = settings["logging"]
-
-                        # Минимальный уровень
-                        if "min_level" in logging_settings:
-                            self.__min_level = LogLevel.from_string(logging_settings["min_level"])
-
-                        # Куда выводить
-                        if "output" in logging_settings:
-                            output = logging_settings["output"].lower()
-                            if output == "console":
-                                self.__log_to_console = True
-                                self.__log_to_file = False
-                            elif output == "file":
-                                self.__log_to_console = False
-                                self.__log_to_file = True
-                            elif output == "both":
-                                self.__log_to_console = True
-                                self.__log_to_file = True
-
-                        # Директория для логов
-                        if "log_directory" in logging_settings:
-                            self.__log_directory = logging_settings["log_directory"]
-
-                        # Префикс файла
-                        if "log_file_prefix" in logging_settings:
-                            self.__log_file_prefix = logging_settings["log_file_prefix"]
-
-                        # Формат логов
-                        if "log_format" in logging_settings:
-                            self.__log_format = logging_settings["log_format"]
-
-                        # Формат даты
-                        if "log_date_format" in logging_settings:
-                            self.__log_date_format = logging_settings["log_date_format"]
-
-                        # Дополнительные настройки
-                        if "enable_daily_files" in logging_settings:
-                            self.__enable_daily_files = logging_settings["enable_daily_files"]
-
-        except Exception:
+        except Exception as e:
             # Используем значения по умолчанию при ошибке
-            pass
+            self.__log_to_console = True
+            self.__log_to_file = False
+            self.__min_level = LogLevel.INFO
+            self.__log_format = "[{level}] {timestamp} - {service}: {message}"
 
     def __update_log_file(self):
         """
