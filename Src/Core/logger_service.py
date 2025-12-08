@@ -1,0 +1,276 @@
+"""
+Сервис логирования с поддержкой ежедневных файлов
+"""
+from Src.Core.log_record import log_record
+from Src.Core.log_level import LogLevel
+from Src.Core.abstract_subscriber import abstract_subscriber
+from Src.Core.validator import validator
+from Src.Core.observe_service import observe_service
+from Src.Core.event_type import event_type
+from Src.settings_manager import settings_manager
+import os
+from datetime import datetime
+
+class logger_service(abstract_subscriber):
+    __instance = None
+    __min_level: LogLevel = LogLevel.DEBUG
+    __log_to_console: bool = True
+    __log_to_file: bool = False
+    __log_directory: str = "logs"
+    __log_file_prefix: str = "app"
+    __log_format: str = "[{level}] {timestamp} - {service}: {message}"
+    __log_date_format: str = "%Y-%m-%d %H:%M:%S"
+    __current_log_file: str = None
+    __current_date: str = None
+    __enable_daily_files: bool = True
+    __initialized: bool = False
+
+    def __new__(cls):
+        if cls.__instance is None:
+            cls.__instance = super(logger_service, cls).__new__(cls)
+        return cls.__instance
+
+    def __init__(self):
+        if not self.__initialized:
+            observe_service.add(self)
+            self.__initialized = True
+
+    def configure(self):
+        """
+        Настроить логгер из настроек приложения.
+        Должен вызываться после инициализации settings_manager.
+        """
+        try:
+            # Получаем настройки через settings_manager
+            settings_mgr = settings_manager()
+            if not hasattr(settings_mgr, '_settings_manager__settings'):
+                # Если настройки еще не загружены, используем значения по умолчанию
+                self.__log_to_console = True
+                self.__log_to_file = False
+                self.__min_level = LogLevel.INFO
+                return
+            
+            # Получаем настройки логирования
+            logging_settings = settings_mgr.get_logging_settings()
+            
+            # Минимальный уровень
+            if "min_level" in logging_settings:
+                self.__min_level = LogLevel.from_string(logging_settings["min_level"])
+            else:
+                self.__min_level = LogLevel.INFO
+
+            # Куда выводить
+            if "output" in logging_settings:
+                output = logging_settings["output"].lower()
+                if output == "console":
+                    self.__log_to_console = True
+                    self.__log_to_file = False
+                elif output == "file":
+                    self.__log_to_console = False
+                    self.__log_to_file = True
+                elif output == "both":
+                    self.__log_to_console = True
+                    self.__log_to_file = True
+                else:
+                    # Значение по умолчанию
+                    self.__log_to_console = True
+                    self.__log_to_file = False
+            else:
+                self.__log_to_console = True
+                self.__log_to_file = False
+
+            # Директория для логов
+            if "log_directory" in logging_settings:
+                self.__log_directory = logging_settings["log_directory"]
+            else:
+                self.__log_directory = "logs"
+
+            # Префикс файла
+            if "log_file_prefix" in logging_settings:
+                self.__log_file_prefix = logging_settings["log_file_prefix"]
+            else:
+                self.__log_file_prefix = "app"
+
+            # Формат логов
+            if "log_format" in logging_settings:
+                self.__log_format = logging_settings["log_format"]
+            else:
+                self.__log_format = "[{level}] {timestamp} - {service}: {message}"
+
+            # Формат даты
+            if "log_date_format" in logging_settings:
+                self.__log_date_format = logging_settings["log_date_format"]
+            else:
+                self.__log_date_format = "%Y-%m-%d %H:%M:%S"
+
+            # Дополнительные настройки
+            if "enable_daily_files" in logging_settings:
+                self.__enable_daily_files = logging_settings["enable_daily_files"]
+            else:
+                self.__enable_daily_files = True
+
+            # Инициализируем текущий файл лога
+            self.__update_log_file()
+
+        except Exception as e:
+            # Используем значения по умолчанию при ошибке
+            self.__log_to_console = True
+            self.__log_to_file = False
+            self.__min_level = LogLevel.INFO
+            self.__log_format = "[{level}] {timestamp} - {service}: {message}"
+
+    def __update_log_file(self):
+        """
+        Обновить текущий файл лога на основе даты
+        """
+        if not self.__log_to_file:
+            return
+
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        if self.__current_date != today:
+            self.__current_date = today
+
+            if self.__enable_daily_files:
+                # Ежедневные файлы
+                self.__current_log_file = f"{self.__log_directory}/{self.__log_file_prefix}_{today}.log"
+            else:
+                # Один файл
+                self.__current_log_file = f"{self.__log_directory}/{self.__log_file_prefix}.log"
+
+            # Создаем директорию если ее нет
+            directory = os.path.dirname(self.__current_log_file)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory)
+
+    def __should_log(self, level: LogLevel) -> bool:
+        """
+        Проверять, нужно ли логировать на данном уровне
+        
+        Args:
+            level (LogLevel): уровень логирования для проверки
+            
+        Returns:
+            bool: True если нужно логировать
+        """
+        return self.__min_level.includes(level)
+
+    def __write_log(self, record: log_record):
+        """
+        Записать лог в соответствии с настройками
+        
+        Args:
+            record (log_record): запись лога для записи
+        """
+        if not self.__should_log(record.level):
+            return
+
+        # Обновляем файл если нужно
+        self.__update_log_file()
+
+        log_str = record.to_string(self.__log_format, self.__log_date_format)
+
+        # Вывод в консоль
+        if self.__log_to_console:
+            print(log_str)
+
+        # Запись в файл
+        if self.__log_to_file and self.__current_log_file:
+            try:
+                with open(self.__current_log_file, 'a', encoding='utf-8') as f:
+                    f.write(log_str + "\n")
+            except Exception:
+                # Если не удалось записать в файл, выводим в консоль
+                if not self.__log_to_console:
+                    print(log_str)
+
+    def log(self, level: LogLevel, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога
+        
+        Args:
+            level (LogLevel): уровень логирования
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        record = log_record(level, message, service, details)
+        self.__write_log(record)
+
+    def debug(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня DEBUG
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.DEBUG, message, service, details)
+
+    def info(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня INFO
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.INFO, message, service, details)
+
+    def warning(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня WARNING
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.WARNING, message, service, details)
+
+    def error(self, message: str, service: str, details: dict = None):
+        """
+        Создать запись лога уровня ERROR
+        
+        Args:
+            message (str): сообщение лога
+            service (str): сервис-источник
+            details (dict): дополнительные детали
+        """
+        self.log(LogLevel.ERROR, message, service, details)
+
+    def handle(self, event: str, params):
+        """
+        Обработка событий логирования
+        
+        Args:
+            event (str): тип события
+            params: параметры события
+        """
+        super().handle(event, params)
+
+        if event == event_type.debug():
+            if isinstance(params, dict):
+                self.debug(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+            else:
+                self.debug(str(params), "unknown")
+        elif event == event_type.info():
+            if isinstance(params, dict):
+                self.info(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+            else:
+                self.info(str(params), "unknown")
+        elif event == event_type.warning():
+            if isinstance(params, dict):
+                self.warning(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+            else:
+                self.warning(str(params), "unknown")
+        elif event == event_type.error():
+            if isinstance(params, dict):
+                self.error(params.get("message", ""), params.get("service", "unknown"), params.get("details"))
+            else:
+                self.error(str(params), "unknown")
+
+# Глобальный экземпляр логгера
+logger = logger_service()

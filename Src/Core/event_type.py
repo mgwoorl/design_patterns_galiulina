@@ -45,6 +45,13 @@ class event_type:
         return "check_dependencies"
 
     """
+    Событие - логгирование уровня DEBUG
+    """
+    @staticmethod
+    def debug() -> str:
+        return "debug"
+
+    """
     Событие - логгирование уровня INFO
     """
     @staticmethod
